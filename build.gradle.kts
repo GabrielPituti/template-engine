@@ -6,7 +6,6 @@ plugins {
 
 group = "com.vaas"
 version = "0.0.1-SNAPSHOT"
-description = "template-engine"
 
 java {
     toolchain {
@@ -25,16 +24,31 @@ repositories {
 }
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("org.springframework.boot:spring-boot-starter-cache")
+    // Core Spring Boot
+    implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-mongodb")
     implementation("org.springframework.boot:spring-boot-starter-validation")
-    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+
+    // Messaging (Kafka)
     implementation("org.springframework.kafka:spring-kafka")
+
+    // Cache (Caffeine)
+    implementation("org.springframework.boot:spring-boot-starter-cache")
+    implementation("com.github.ben-manes.caffeine:caffeine")
+
+    // MapStruct e Lombok
     compileOnly("org.projectlombok:lombok")
+    annotationProcessor("org.projectlombok:lombok")
+    implementation("org.mapstruct:mapstruct:1.6.3")
+    annotationProcessor("org.mapstruct:mapstruct-processor:1.6.3")
+    annotationProcessor("org.projectlombok:lombok-mapstruct-binding:0.2.0")
+
+    // DevTools e Docker Compose
     developmentOnly("org.springframework.boot:spring-boot-devtools")
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
-    annotationProcessor("org.projectlombok:lombok")
+
+    // Testes e Testcontainers
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.springframework.kafka:spring-kafka-test")
