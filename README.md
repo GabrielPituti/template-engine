@@ -1,27 +1,35 @@
-Notification Template Engine - Fase 2 & 3: Domínio e Persistência
+Notification Template Engine - Fase 4: Lógica de Negócio e Serviços
 
-Nesta fase, implementamos o "Coração" do sistema seguindo os princípios de Domain-Driven Design (DDD) e Arquitetura Hexagonal.
+Nesta fase, implementamos a "inteligência" do sistema, traduzindo os Requisitos Funcionais (RF01 e RF02) em serviços de aplicação robustos e regras de negócio claras.
 
 🛠️ O que foi entregue nesta fase:
 
-Modelo de Domínio: Criação do Aggregate Root NotificationTemplate e entidades filhas.
+TemplateService: O orquestrador central que gere o ciclo de vida dos templates, desde a criação do rascunho (DRAFT) até à publicação oficial.
 
-Value Objects: Uso de Java Records para SemanticVersion e InputVariable, garantindo imutabilidade.
+Tratamento de Exceções: Implementação da BusinessException para garantir que erros de regra de negócio sejam capturados e retornados de forma padronizada.
 
-Ports & Adapters: Definição de interfaces de repositório no domínio e implementação técnica na camada de infraestrutura.
+Gestão de Estados: Lógica para garantir que apenas versões em rascunho possam ser alteradas ou publicadas.
 
-MongoDB Integration: Configuração de repositórios Spring Data para persistência dos templates e logs de execução.
+Versionamento Inicial: Automação da criação da primeira versão (1.0.0) no momento da criação do template.
 
-🧱 Padrões Utilizados:
+Testes Unitários (Mockito): Cobertura das regras de negócio do TemplateService garantindo isolamento total da camada de persistência.
 
-Soft Delete: Templates não são removidos fisicamente, mantendo a integridade histórica.
+🧱 Regras de Negócio Implementadas:
 
-Optimistic Locking: Uso de @Version para evitar que edições simultâneas causem perda de dados.
+Imutabilidade: Uma vez que uma TemplateVersion é marcada como PUBLISHED, ela não pode mais sofrer alterações (Garantido pela lógica de serviço).
 
-Multi-tenancy: Todos os modelos de persistência incluem orgId e workspaceId para isolamento lógico de dados.
+Isolamento de Erros: Utilização de códigos de erro semânticos como TEMPLATE_NOT_FOUND e VERSION_ALREADY_PUBLISHED.
 
-🚀 Próximos Passos:
+Atomicidade: Utilização da anotação @Transactional para garantir que a criação do template e da sua versão inicial ocorram como uma única operação no MongoDB.
 
-Implementação da camada de aplicação (Services) e lógica de versionamento.
+🚀 Como validar esta branch:
 
-Configuração do motor de renderização de placeholders.
+Testes Unitários: Execute ./gradlew test para validar as regras de negócio de forma isolada.
+
+Compilação: Certifica-te de que o projeto compila sem erros: ./gradlew classes.
+
+⏳ Próximos Passos:
+
+Implementação do Motor de Renderização (RenderEngine) para processar os placeholders {{variable}}.
+
+Validação de Schema: Garantir que os dados enviados pelo cliente batem com o inputSchema definido no template.
