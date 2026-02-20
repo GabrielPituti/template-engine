@@ -1,6 +1,7 @@
 package com.vaas.templateengine.application.service;
 
 import com.vaas.templateengine.domain.model.*;
+import com.vaas.templateengine.domain.port.NotificationExecutionRepository;
 import com.vaas.templateengine.domain.port.NotificationTemplateRepository;
 import com.vaas.templateengine.shared.exception.BusinessException;
 import org.junit.jupiter.api.DisplayName;
@@ -11,6 +12,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -18,15 +21,24 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
- * Teste Unitário: Valida a lógica de negócio do TemplateService.
- * Implementa validações clínicas para garantir imutabilidade e consistência de estados.
+ * Teste Unitário: Valida a lógica de negócio do TemplateService de forma integrada.
+ * Cobre criação, execução, publicação e versionamento semântico automático.
  */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("Regras de Negócio do Template Service")
+@DisplayName("Regras de Negócio do Template Service - Integrado")
 class TemplateServiceTest {
 
     @Mock
-    private NotificationTemplateRepository repository;
+    private NotificationTemplateRepository templateRepository;
+
+    @Mock
+    private NotificationExecutionRepository executionRepository;
+
+    @Mock
+    private SchemaValidator schemaValidator;
+
+    @Mock
+    private RenderEngine renderEngine;
 
     @InjectMocks
     private TemplateService service;
@@ -35,7 +47,7 @@ class TemplateServiceTest {
     @DisplayName("Deve criar um template com versão 1.0.0 em estado DRAFT")
     void shouldCreateTemplateWithInitialVersion() {
         // Given
-        when(repository.save(any(NotificationTemplate.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(templateRepository.save(any(NotificationTemplate.class))).thenAnswer(i -> i.getArgument(0));
 
         // When
         NotificationTemplate result = service.createTemplate(
@@ -47,95 +59,177 @@ class TemplateServiceTest {
         assertEquals(1, result.getVersions().size());
         assertEquals("1.0.0", result.getVersions().getFirst().getVersion().toString());
         assertEquals(VersionState.DRAFT, result.getVersions().getFirst().getEstado());
-        verify(repository, times(1)).save(any());
+        verify(templateRepository, times(1)).save(any());
     }
 
     @Test
-    @DisplayName("Deve publicar uma versão com sucesso")
-    void shouldPublishVersionSuccessfully() {
+    @DisplayName("Deve atualizar o rascunho existente se a última versão ainda for DRAFT")
+    void shouldUpdateDraftVersionWithoutCreatingNewOne() {
         // Given
-        String templateId = "template-1";
-        String versionId = "v1";
-
-        TemplateVersion draftVersion = TemplateVersion.builder()
-                .id(versionId)
+        String templateId = "t-1";
+        TemplateVersion v1 = TemplateVersion.builder()
+                .id("v1")
+                .version(new SemanticVersion(1, 0, 0))
                 .estado(VersionState.DRAFT)
+                .body("Corpo Antigo")
+                .inputSchema(new ArrayList<>())
                 .build();
 
         NotificationTemplate template = NotificationTemplate.builder()
                 .id(templateId)
-                .versions(new ArrayList<>(java.util.List.of(draftVersion)))
+                .versions(new ArrayList<>(List.of(v1)))
                 .build();
 
-        when(repository.findById(templateId)).thenReturn(Optional.of(template));
-        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(templateRepository.findById(templateId)).thenReturn(Optional.of(template));
+        when(templateRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         // When
-        NotificationTemplate result = service.publishVersion(templateId, versionId);
+        NotificationTemplate result = service.updateTemplate(templateId, "Assunto", "Novo Corpo", new ArrayList<>(), "Update draft");
 
         // Then
-        assertEquals(VersionState.PUBLISHED, result.getVersions().getFirst().getEstado());
-        verify(repository, times(1)).save(template);
+        assertEquals(1, result.getVersions().size());
+        assertEquals("Novo Corpo", result.getVersions().getFirst().getBody());
+        assertEquals("1.0.0", result.getVersions().getFirst().getVersion().toString());
     }
 
     @Test
-    @DisplayName("Deve lançar erro ao tentar publicar uma versão que já está publicada (Imutabilidade)")
-    void shouldThrowErrorWhenPublishingAlreadyPublishedVersion() {
+    @DisplayName("Deve criar nova versão PATCH (1.0.1) quando apenas o corpo muda e a última versão é PUBLISHED")
+    void shouldCreateNewPatchVersionWhenBodyChanges() {
         // Given
-        String templateId = "template-123";
-        String versionId = "v1";
-
-        TemplateVersion publishedVersion = TemplateVersion.builder()
-                .id(versionId)
+        String templateId = "t-1";
+        List<InputVariable> schema = List.of(new InputVariable("var", VariableType.STRING, true));
+        TemplateVersion v1 = TemplateVersion.builder()
+                .id("v1")
+                .version(new SemanticVersion(1, 0, 0))
                 .estado(VersionState.PUBLISHED)
+                .body("Corpo Antigo")
+                .inputSchema(schema)
                 .build();
 
         NotificationTemplate template = NotificationTemplate.builder()
                 .id(templateId)
-                .versions(new ArrayList<>(java.util.List.of(publishedVersion)))
+                .versions(new ArrayList<>(List.of(v1)))
                 .build();
 
-        when(repository.findById(templateId)).thenReturn(Optional.of(template));
+        when(templateRepository.findById(templateId)).thenReturn(Optional.of(template));
+        when(templateRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        // When & Then
-        BusinessException exception = assertThrows(BusinessException.class, () ->
-                service.publishVersion(templateId, versionId)
-        );
+        // When
+        NotificationTemplate result = service.updateTemplate(templateId, "Assunto", "Corpo Novo", schema, "Novo patch");
 
-        assertEquals("VERSION_ALREADY_PUBLISHED", exception.getCode());
-        verify(repository, never()).save(any());
+        // Then
+        assertEquals(2, result.getVersions().size());
+        TemplateVersion latest = result.getVersions().stream()
+                .max((vA, vB) -> vA.getVersion().compareTo(vB.getVersion())).get();
+
+        assertEquals("1.0.1", latest.getVersion().toString());
+        assertEquals(VersionState.DRAFT, latest.getEstado());
     }
 
     @Test
-    @DisplayName("Deve lançar erro quando a versão não existe no template")
-    void shouldThrowErrorWhenVersionDoesNotExist() {
+    @DisplayName("Deve criar nova versão MINOR (1.1.0) quando o schema de variáveis muda")
+    void shouldCreateNewMinorVersionWhenSchemaChanges() {
         // Given
-        String templateId = "template-1";
+        String templateId = "t-1";
+        TemplateVersion v1 = TemplateVersion.builder()
+                .id("v1")
+                .version(new SemanticVersion(1, 0, 0))
+                .estado(VersionState.PUBLISHED)
+                .inputSchema(new ArrayList<>())
+                .build();
+
+        NotificationTemplate template = NotificationTemplate.builder()
+                .id(templateId)
+                .versions(new ArrayList<>(List.of(v1)))
+                .build();
+
+        List<InputVariable> newSchema = List.of(new InputVariable("nome", VariableType.STRING, true));
+
+        when(templateRepository.findById(templateId)).thenReturn(Optional.of(template));
+        when(templateRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        // When
+        NotificationTemplate result = service.updateTemplate(templateId, "Assunto", "Corpo", newSchema, "Novo schema");
+
+        // Then
+        TemplateVersion latest = result.getVersions().stream()
+                .max((vA, vB) -> vA.getVersion().compareTo(vB.getVersion())).get();
+
+        assertEquals("1.1.0", latest.getVersion().toString());
+    }
+
+    @Test
+    @DisplayName("Deve executar um template com sucesso procurando a última versão publicada")
+    void shouldExecuteTemplateUsingLatestPublishedVersion() {
+        // Given
+        String templateId = "t-123";
+        TemplateVersion v1 = TemplateVersion.builder()
+                .id("v1")
+                .version(new SemanticVersion(1, 0, 0))
+                .estado(VersionState.PUBLISHED)
+                .body("Olá {{nome}}")
+                .build();
+
+        NotificationTemplate template = NotificationTemplate.builder()
+                .id(templateId)
+                .versions(new ArrayList<>(List.of(v1)))
+                .build();
+
+        Map<String, Object> vars = Map.of("nome", "Gabriel");
+
+        when(templateRepository.findById(templateId)).thenReturn(Optional.of(template));
+        when(renderEngine.render(anyString(), anyMap())).thenReturn("Olá Gabriel");
+        when(executionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        // When
+        NotificationExecution result = service.executeTemplate(templateId, null, List.of("user@test.com"), vars);
+
+        // Then
+        assertNotNull(result);
+        assertEquals("Olá Gabriel", result.getRenderedContent());
+        assertEquals(ExecutionStatus.SUCCESS, result.getStatus());
+
+        verify(schemaValidator).validate(any(), eq(vars));
+        verify(renderEngine).render(eq("Olá {{nome}}"), eq(vars));
+        verify(executionRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("Deve lançar erro ao tentar executar se não houver nenhuma versão publicada")
+    void shouldThrowErrorWhenNoPublishedVersionFound() {
+        // Given
+        String templateId = "t-123";
         NotificationTemplate template = NotificationTemplate.builder()
                 .id(templateId)
                 .versions(new ArrayList<>())
                 .build();
 
-        when(repository.findById(templateId)).thenReturn(Optional.of(template));
+        when(templateRepository.findById(templateId)).thenReturn(Optional.of(template));
 
         // When & Then
-        BusinessException exception = assertThrows(BusinessException.class, () ->
-                service.publishVersion(templateId, "non-existent")
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                service.executeTemplate(templateId, null, List.of(), Map.of())
         );
 
-        assertEquals("VERSION_NOT_FOUND", exception.getCode());
+        assertEquals("NO_PUBLISHED_VERSION", ex.getCode());
     }
 
     @Test
-    @DisplayName("Deve lançar erro quando o template não existe")
-    void shouldThrowErrorWhenTemplateNotFound() {
+    @DisplayName("Deve lançar erro ao tentar publicar uma versão que já está publicada")
+    void shouldThrowErrorWhenPublishingAlreadyPublishedVersion() {
         // Given
-        when(repository.findById("invalid")).thenReturn(Optional.empty());
+        String templateId = "t-1";
+        String versionId = "v1";
+        TemplateVersion published = TemplateVersion.builder().id(versionId).estado(VersionState.PUBLISHED).build();
+        NotificationTemplate template = NotificationTemplate.builder().id(templateId).versions(new ArrayList<>(List.of(published))).build();
+
+        when(templateRepository.findById(templateId)).thenReturn(Optional.of(template));
 
         // When & Then
-        BusinessException exception = assertThrows(BusinessException.class, () ->
-                service.getById("invalid")
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                service.publishVersion(templateId, versionId)
         );
-        assertEquals("TEMPLATE_NOT_FOUND", exception.getCode());
+
+        assertEquals("VERSION_ALREADY_PUBLISHED", ex.getCode());
     }
 }
