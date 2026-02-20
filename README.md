@@ -6,30 +6,34 @@ Nesta fase, implementamos a "inteligência" do sistema, traduzindo os Requisitos
 
 TemplateService: O orquestrador central que gere o ciclo de vida dos templates, desde a criação do rascunho (DRAFT) até à publicação oficial.
 
+RenderEngine (Motor de Renderização): Implementação de alto desempenho utilizando Regex e StringBuilder para substituição de placeholders {{variable}}.
+
 Tratamento de Exceções: Implementação da BusinessException para garantir que erros de regra de negócio sejam capturados e retornados de forma padronizada.
 
-Gestão de Estados: Lógica para garantir que apenas versões em rascunho possam ser alteradas ou publicadas.
+Testes Unitários (Mockito & JUnit 5): Cobertura completa das regras de serviço e dos cenários de renderização (sucesso, variáveis ausentes e conteúdos nulos).
 
-Versionamento Inicial: Automação da criação da primeira versão (1.0.0) no momento da criação do template.
+🧱 Padrões e Detalhes Técnicos (Nível Sênior):
 
-Testes Unitários (Mockito): Cobertura das regras de negócio do TemplateService garantindo isolamento total da camada de persistência.
+Imutabilidade: Garantia de que versões PUBLISHED não podem ser alteradas.
 
-🧱 Regras de Negócio Implementadas:
+Performance de Texto: Uso de StringBuilder e Matcher.quoteReplacement no motor de renderização para evitar overhead de memória e erros de caracteres especiais.
 
-Imutabilidade: Uma vez que uma TemplateVersion é marcada como PUBLISHED, ela não pode mais sofrer alterações (Garantido pela lógica de serviço).
+Tratamento Clínico: Erros específicos como MISSING_REQUIRED_VARIABLE em vez de erros genéricos de processamento.
 
-Isolamento de Erros: Utilização de códigos de erro semânticos como TEMPLATE_NOT_FOUND e VERSION_ALREADY_PUBLISHED.
-
-Atomicidade: Utilização da anotação @Transactional para garantir que a criação do template e da sua versão inicial ocorram como uma única operação no MongoDB.
+Atomicidade: Uso de @Transactional para garantir consistência entre Template e Versão.
 
 🚀 Como validar esta branch:
 
-Testes Unitários: Execute ./gradlew test para validar as regras de negócio de forma isolada.
+Testes Unitários: Execute ./gradlew test.
 
-Compilação: Certifica-te de que o projeto compila sem erros: ./gradlew classes.
+TemplateServiceTest: Valida estados e imutabilidade.
+
+RenderEngineTest: Valida a substituição de placeholders.
+
+Compilação: ./gradlew classes.
 
 ⏳ Próximos Passos:
 
-Implementação do Motor de Renderização (RenderEngine) para processar os placeholders {{variable}}.
+Schema Validator: Implementar a validação que garante que o tipo da variável (NUMBER, DATE, etc.) enviado no JSON condiz com o definido no inputSchema.
 
-Validação de Schema: Garantir que os dados enviados pelo cliente batem com o inputSchema definido no template.
+Template Versioning: Lógica para criar automaticamente novas versões (Patch/Minor/Major).
