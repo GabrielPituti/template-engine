@@ -39,7 +39,7 @@ public class NotificationTemplate {
     private List<TemplateVersion> versions;
 
     @Version
-    private Long internalVersion; // Optimistic Locking para evitar condições de corrida
+    private Long internalVersion; // Optimistic Locking para evitar race conditions
 
     public void addVersion(TemplateVersion templateVersion) {
         if (this.versions == null) {
