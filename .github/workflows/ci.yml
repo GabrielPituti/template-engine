@@ -24,7 +24,7 @@ jobs:
 
       # Passo essencial: Subir a infraestrutura antes de rodar os testes
       - name: Start Infrastructure (Docker Compose)
-        run: docker-compose up -d
+        run: docker compose up -d
 
       # Aguarda alguns segundos para o MongoDB e Kafka estarem prontos
       - name: Wait for Infrastructure
@@ -35,4 +35,4 @@ jobs:
 
       # Opcional: Derrubar a infra após o sucesso
       - name: Stop Infrastructure
-        run: docker-compose down
+        run: docker compose down
