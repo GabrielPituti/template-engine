@@ -1,29 +1,70 @@
-Notification Template Engine - Fase 4: Lógica de Negócio e Serviços
+Notification Template Engine (VaaS Challenge)
 
-Nesta fase, implementamos a "inteligência" do sistema, elevando o projeto ao nível de maturidade exigido para sistemas críticos, resilientes e multi-tenant.
+Microsserviço multi-tenant de alto desempenho para gestão, versionamento e execução de templates de notificação (E-mail, SMS, Webhook).
 
-🛠️ O que foi entregue nesta fase:
+🎯 Visão Geral
 
-TemplateService: Orquestrador central com suporte a Optimistic Locking para evitar race conditions em ambientes distribuídos.
+Este projeto foi desenvolvido com foco em missão crítica, utilizando as melhores práticas de engenharia para garantir integridade de dados, performance de renderização e rastreabilidade total de execuções. A solução resolve o desafio técnico de fornecer uma engine flexível para notificações em contextos de alta volumetria.
 
-Motor de Renderização Sênior: Substituição de placeholders {{variable}} com XSS Protection (HTML Escape) automático para o canal de E-mail.
+🏗️ Arquitetura
 
-Integridade Temporal ISO-8601: Migração total para OffsetDateTime, garantindo rastreabilidade temporal absoluta independente da localização do servidor.
+A solução utiliza Arquitetura Hexagonal (Ports & Adapters) e princípios de Domain-Driven Design (DDD) para isolar o domínio das tecnologias de infraestrutura:
 
-Persistência Global: Implementação de conversores de fuso horário para compatibilidade total entre Java e MongoDB.
+Domínio: Agregados (NotificationTemplate), Entidades (TemplateVersion), Value Objects (SemanticVersion) e Eventos de Domínio selados.
 
-SchemaValidator: Validação clínica de tipos (NUMBER, STRING, BOOLEAN, DATE) e obrigatoriedade antes do processamento.
+Persistência: MongoDB com suporte a fuso horário absoluto (OffsetDateTime) e controlo de concorrência otimista (@Version).
 
-Testes de Unidade e Integração: Cobertura total das regras de imutabilidade, concorrência e integridade de dados.
+Execução: Motor de renderização leve baseado em Regex e StringBuilder com proteções contra ReDoS e XSS.
 
-🧱 Decisões Técnicas & Trade-offs:
+Mensageria: Infraestrutura Kafka (modo KRaft) para comunicação assíncrona e padrões CQRS.
 
-OffsetDateTime vs LocalDateTime: Optamos por OffsetDateTime para eliminar ambiguidades de fuso horário, essencial em sistemas multi-tenant.
+Cache: Caffeine para redução drástica de latência na recuperação de templates publicados.
 
-Mongo Custom Converters: Como o MongoDB nativo não suporta OffsetDateTime, implementamos WritingConverter e ReadingConverter para manter a precisão dos dados sem perder a compatibilidade com o banco.
+🚀 Como Executar o Projeto
 
-Segurança de Canal: O motor de renderização aplica escape de HTML apenas para o canal EMAIL, preservando a integridade de dados brutos para SMS e WEBHOOK.
+Pré-requisitos
 
-🚀 Como validar:
+Java 21 (Amazon Corretto ou Temurin).
 
-Execute ./gradlew test para validar todas as proteções e a integridade da persistência.
+Docker Desktop.
+
+Inicialização
+
+Sobe a infraestrutura necessária (MongoDB, Kafka, Kafdrop):
+
+docker-compose up -d
+
+
+Executa o build completo e os testes de integração (Testcontainers):
+
+./gradlew build
+
+
+Inicia a aplicação:
+
+./gradlew bootRun
+
+
+🛠️ Monitoramento e Ferramentas
+
+Swagger UI (Documentação API): http://localhost:8080/swagger-ui.html
+
+Kafdrop (Visualizador Kafka): http://localhost:9000
+
+Actuator Health: http://localhost:8080/actuator/health
+
+🌿 Estrutura de Branches (Roadmap Incremental)
+
+O desenvolvimento seguiu uma evolução lógica e documentada em branches semânticas:
+
+main: Versão estável, documentada e consolidada.
+
+feat/infrastructure-setup: Setup de ambiente, Docker e pipeline CI/CD.
+
+feat/domain-persistence: Modelagem DDD e camada de persistência.
+
+feat/business-logic: Motor de renderização, regras de segurança e versionamento.
+
+feat/api-messaging-plus: Camada de exposição REST, Kafka e diferenciais sênior.
+
+Data de Entrega Final: 24/02/2026
