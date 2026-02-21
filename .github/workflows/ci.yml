@@ -22,17 +22,7 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # Passo essencial: Subir a infraestrutura antes de rodar os testes
-      - name: Start Infrastructure (Docker Compose)
-        run: docker compose up -d
-
-      # Aguarda alguns segundos para o MongoDB e Kafka estarem prontos
-      - name: Wait for Infrastructure
-        run: sleep 20
-
+      # O Testcontainers se encarregará de subir o Mongo e o Kafka
+      # Não precisamos mais de docker-compose up nem de sleep 20 aqui.
       - name: Build and Test with Gradle
         run: ./gradlew build
-
-      # Opcional: Derrubar a infra após o sucesso
-      - name: Stop Infrastructure
-        run: docker compose down

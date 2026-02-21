@@ -1,54 +1,58 @@
-Notification Template Engine - Fase 5: API, Mensageria e Diferenciais
+Notification Template Engine - Fase 5: API, Mensageria e Diferenciais Sênior
 
-Esta fase do projeto consolida a transformação do motor de templates num serviço distribuído, resiliente e de alta performance, estabelecendo as bases para a camada de exposição REST com eventos assíncronos e otimizações de nível sênior.
+Esta fase final consolida a transformação do motor de templates num serviço distribuído, resiliente e de alta performance. O projeto não apenas cumpre os requisitos funcionais, mas implementa diferenciais de engenharia que garantem a segurança e a escalabilidade em ambientes multi-tenant de alta volumetria.
 
-🛠️ O que foi consolidado nesta etapa:
+🛠️ O que está sendo entregue (Foco em Excelência)
 
-Segurança Clínica (ReDoS & XSS): O motor de renderização foi blindado com expressões regulares não-gananciosas e limites estritos de tamanho de conteúdo (MAX_CONTENT_LENGTH), além de proteção automática contra injeção de scripts para o canal de e-mail.
+API RESTful & Mapeamento Profissional: Exposição de endpoints via Spring Web, utilizando MapStruct para garantir que o modelo de banco de dados (Entidades) nunca vaze para o consumidor da API (DTOs).
 
-Infraestrutura de Cache (Caffeine): Implementação de cache local para templates em estado PUBLISHED, reduzindo drasticamente a latência em cenários de alta volumetria e minimizando o I/O no MongoDB.
+Segurança ReDoS & XSS: Motor de renderização blindado contra Regular Expression Denial of Service através de limites de tamanho (MAX_CONTENT_LENGTH) e regex não-gananciosa. Proteção ativa contra Cross-Site Scripting no canal de e-mail.
 
-Fundação de Mensageria (Domain Events): Definição da hierarquia de eventos de domínio utilizando Sealed Interfaces do Java 21, garantindo que apenas eventos autorizados e tipados sejam disparados para o Kafka.
+Performance com Caffeine Cache: Implementação de cache em memória para templates publicados. Estratégia de consistência garantida via @CacheEvict em operações de publicação e arquivamento.
 
-Mapeamento Profissional (MapStruct): Configuração do motor de mapeamento para assegurar o desacoplamento total entre o Core de Domínio e os DTOs de entrada e saída.
+Mensageria com Kafka (KRaft): Disparo de eventos de domínio utilizando Sealed Interfaces do Java 21, permitindo uma integração assíncrona e desacoplada para auditoria e projeções CQRS.
 
-Resiliência nos Testes (Testcontainers): Ajuste de visibilidade e configuração das instâncias dinâmicas de MongoDB e Kafka, garantindo que o build seja 100% reprodutível em qualquer ambiente com Docker.
+Integridade de Dados: Uso de OffsetDateTime para rastreabilidade global e Optimistic Locking (@Version) para prevenir conflitos de escrita (Race Conditions).
 
-Tratamento de Concorrência (HTTP 409): Mapeamento global de falhas de Optimistic Locking para respostas semânticas de conflito, orientando o cliente da API sobre race conditions.
+🧱 Decisões Técnicas & Trade-offs (Para Defesa em Entrevista)
 
-🧱 Decisões Técnicas & Trade-offs:
+Por que Motor Regex Customizado?
 
-Invalidação de Cache: Optou-se pela estratégia de @CacheEvict sincronizada com o ciclo de vida de publicação de versões, garantindo consistência eventual imediata para o motor de execução.
+Argumento: Bibliotecas como Freemarker possuem um overhead de memória significativo. Optamos por uma implementação leve com StringBuilder para reduzir pausas de Garbage Collection em cenários de alta carga.
 
-Backtracking Controlado: A escolha por um motor Regex customizado, em detrimento de bibliotecas pesadas, justifica-se pela economia de memória heap, sendo a segurança garantida pela validação prévia de profundidade e tamanho do template.
+Por que Sealed Interfaces nos Eventos?
 
-Event-Driven Foundation: A estrutura de eventos foi desenhada para suportar o padrão Outbox, assegurando que o estado do banco e o despacho de mensagens permaneçam íntegros.
+Argumento: Garante segurança de tipos em tempo de compilação e exaustividade no processamento de eventos, seguindo as melhores práticas do Java moderno.
+
+Resiliência do Pipeline (CI/CD):
+
+Argumento: Optamos pelo uso exclusivo de Testcontainers no pipeline de integração contínua, eliminando a necessidade de scripts manuais de Docker Compose no CI e garantindo que os testes sejam agnósticos ao ambiente.
 
 🚀 Como Validar
 
-Execução dos Testes
+Execução de Testes de Alta Fidelidade
 
-Para validar a integridade da persistência, segurança do motor e a infraestrutura de containers, execute no terminal do IntelliJ:
+Utilizamos Testcontainers para validar o fluxo real de persistência e mensageria:
 
 ./gradlew test
 
 
-Monitorização da Infraestrutura
+Monitorização
 
-Swagger UI: http://localhost:8080/swagger-ui.html (Em breve com endpoints ativos).
+Swagger UI: http://localhost:8080/swagger-ui.html
 
-Kafdrop: http://localhost:9000 (Monitoramento de tópicos).
+Kafdrop: http://localhost:9000 (Visualização de eventos em tempo real).
 
-MongoDB Compass: Conectar em mongodb://localhost:27017.
+🛠️ Troubleshooting (Resolução de Problemas)
 
-🛠️ Troubleshooting
+Erros de Docker/Testcontainers no CI (GitHub Actions)
 
-Falha no Testcontainers
+Caso o teste falhe com ContainerLaunchException ou LogMessageWaitStrategy:
 
-Caso os testes falhem por timeout ou conexão:
+Conflito de Infraestrutura: Verifique se o CI não está tentando subir containers via Docker Compose manualmente. O Testcontainers deve ser o único responsável pela infra durante os testes para evitar contenção de recursos.
 
-Valide se o Docker Desktop está funcional (docker ps).
+Visibilidade da Configuração: Garanta que TestcontainersConfiguration é public para que o Spring consiga injetar as propriedades de conexão dinâmicas corretamente.
 
-Utilize o terminal da IDE para garantir que as variáveis de ambiente (JAVA_HOME) estão corretamente mapeadas para o SDK 21.
+Timeout de Inicialização: Em ambientes de CI limitados, imagens "native" podem demorar mais para sinalizar prontidão. A simplificação do pipeline resolve a maioria desses casos.
 
-Status: Build Successful 🟢 | Infraestrutura e Segurança Consolidadas ✅
+Status da Branch: Build Successful Local 🟢 | Pipeline CI em Otimização ⚙️
