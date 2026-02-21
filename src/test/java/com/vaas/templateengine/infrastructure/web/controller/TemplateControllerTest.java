@@ -6,6 +6,7 @@ import com.vaas.templateengine.application.service.TemplateService;
 import com.vaas.templateengine.domain.model.Channel;
 import com.vaas.templateengine.domain.model.NotificationTemplate;
 import com.vaas.templateengine.domain.model.TemplateStatus;
+import com.vaas.templateengine.domain.port.NotificationTemplateRepository;
 import com.vaas.templateengine.infrastructure.messaging.NotificationProducer;
 import com.vaas.templateengine.infrastructure.persistence.TemplateStatsRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -27,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Testes de contrato da API REST para o TemplateController.
- * Utiliza MockitoBean para conformidade com o Spring Boot 3.5.
+ * Utiliza MockitoBean (substituto do MockBean no Spring Boot 3.5+) para isolar a camada web.
  */
 @WebMvcTest(TemplateController.class)
 @DisplayName("API: Template Controller")
@@ -51,9 +52,13 @@ class TemplateControllerTest {
     @MockitoBean
     private TemplateStatsRepository statsRepository;
 
+    @MockitoBean
+    private NotificationTemplateRepository templateRepository;
+
     @Test
     @DisplayName("Deve criar um template e retornar 201 Created")
     void shouldCreateTemplate() throws Exception {
+        // Cenário
         TemplateMapper.CreateTemplateRequest request = new TemplateMapper.CreateTemplateRequest(
                 "Welcome", "Desc", Channel.EMAIL, "org-1", "wp-1"
         );
@@ -68,10 +73,12 @@ class TemplateControllerTest {
                 "uuid-123", "Welcome", "Desc", Channel.EMAIL, "ACTIVE", OffsetDateTime.now(), null
         );
 
+        // Mocking
         when(templateService.createTemplate(anyString(), anyString(), any(), anyString(), anyString()))
                 .thenReturn(template);
         when(mapper.toResponse(any())).thenReturn(response);
 
+        // Execução e Validação
         mockMvc.perform(post("/v1/templates")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))

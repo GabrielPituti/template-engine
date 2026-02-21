@@ -10,14 +10,23 @@ import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 /**
- * Adapter (Detalhe Técnico): Interface do Spring Data que fala com o MongoDB.
+ * Adapter técnico para o MongoDB.
+ * Utiliza JSON queries dinâmicas para suportar a filtragem opcional do RF01.
  */
 @Repository
 public interface SpringDataMongoTemplateRepository extends MongoRepository<NotificationTemplate, String> {
 
-    // Query dinâmica para suportar os filtros opcionais do RF01
+    /**
+     * Query que ignora filtros nulos de forma sênior.
+     * O uso de lógica condicional ($or com $expr) no MongoDB garante que, se o parâmetro for nulo (null),
+     * a restrição seja ignorada para aquele campo específico.
+     */
     @Query("{ 'orgId': ?0, 'workspaceId': ?1, " +
-            "'channel': { $skip: ?2 == null }, 'status': { $skip: ?3 == null } }")
+            "  $and: [ " +
+            "    { $or: [ { $expr: { $eq: [?2, null] } }, { 'channel': ?2 } ] }, " +
+            "    { $or: [ { $expr: { $eq: [?3, null] } }, { 'status': ?3 } ] } " +
+            "  ]" +
+            "}")
     Page<NotificationTemplate> findByFilters(
             String orgId,
             String workspaceId,

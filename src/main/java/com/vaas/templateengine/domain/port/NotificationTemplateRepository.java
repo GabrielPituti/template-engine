@@ -9,8 +9,8 @@ import org.springframework.data.domain.Pageable;
 import java.util.Optional;
 
 /**
- * Port (Interface de Saída): Define como o domínio deseja salvar e buscar templates.
- * Conforme RF01: Suporta filtros por canal e status com paginação.
+ * Port (Interface de Saída): Define o contrato de persistência para templates.
+ * Suporta busca paginada com filtros opcionais conforme RF01.
  */
 public interface NotificationTemplateRepository {
 
@@ -18,6 +18,9 @@ public interface NotificationTemplateRepository {
 
     Optional<NotificationTemplate> findById(String id);
 
+    /**
+     * Busca templates de forma paginada aplicando filtros de organização, workspace, canal e status.
+     */
     Page<NotificationTemplate> findAll(
             String orgId,
             String workspaceId,

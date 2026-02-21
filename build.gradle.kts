@@ -30,6 +30,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
 
+    // Swagger UI / OpenAPI 3 (Adicionado para resolver o erro 404)
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5")
+
     // Messaging (Kafka)
     implementation("org.springframework.kafka:spring-kafka")
 
