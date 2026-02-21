@@ -9,26 +9,40 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Componente responsável pela interpolação de variáveis em templates.
- * Utiliza expressões regulares compiladas para garantir alta performance sob carga.
+ * Motor de renderização otimizado para alta performance e baixa alocação de memória.
+ * Implementa salvaguardas contra ataques de ReDoS e negação de serviço por estouro de conteúdo.
  */
 @Component
 public class RenderEngine {
 
-    /** Regex para identificar padrões {{variavel}} */
+    /** * Expressão regular não-gananciosa para identificação de placeholders.
+     * O uso de '.+?' aliado à validação de tamanho previne o backtracking catastrófico (ReDoS).
+     */
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{(.+?)\\}\\}");
 
+    /** * Limite de segurança para o tamanho do conteúdo (50KB).
+     * Impede o processamento de strings excessivamente longas que poderiam causar exaustão de CPU ou Memória.
+     */
+    private static final int MAX_CONTENT_LENGTH = 50_000;
+
     /**
-     * Renderiza o conteúdo substituindo placeholders por valores do contexto.
-     * @param content O texto bruto do template.
-     * @param variables Mapa de dados para preenchimento.
-     * @param shouldEscapeHtml Se verdadeiro, aplica escape de caracteres HTML para prevenir XSS.
-     * @return Conteúdo final processado.
-     * @throws BusinessException Caso uma variável obrigatória no template não seja fornecida.
+     * Processa a substituição de placeholders por valores reais do contexto de execução.
+     * * @param content Texto bruto do template contendo os placeholders.
+     * @param variables Mapa contendo as chaves e valores para preenchimento.
+     * @param shouldEscapeHtml Define se deve aplicar sanitização contra injeção de script (XSS).
+     * @return Conteúdo processado, com as variáveis interpoladas e seguro para o canal de saída.
+     * @throws BusinessException Caso o conteúdo exceda limites de segurança ou faltem variáveis obrigatórias.
      */
     public String render(String content, Map<String, Object> variables, boolean shouldEscapeHtml) {
         if (content == null || content.isEmpty()) {
             return "";
+        }
+
+        if (content.length() > MAX_CONTENT_LENGTH) {
+            throw new BusinessException(
+                    "O conteúdo do template excede o limite de segurança permitido.",
+                    "TEMPLATE_TOO_LARGE"
+            );
         }
 
         StringBuilder sb = new StringBuilder();
@@ -47,12 +61,10 @@ public class RenderEngine {
 
             String stringValue = value.toString();
 
-            // Mitigação de ataques XSS para canais que interpretam HTML (ex: E-mail)
             if (shouldEscapeHtml) {
                 stringValue = HtmlUtils.htmlEscape(stringValue);
             }
 
-            // QuoteReplacement garante que caracteres especiais no valor não quebrem a regex
             matcher.appendReplacement(sb, Matcher.quoteReplacement(stringValue));
         }
         matcher.appendTail(sb);
