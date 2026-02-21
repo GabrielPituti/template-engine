@@ -8,15 +8,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * Service: Implementa os casos de uso de gerenciamento e execução de templates.
- * Integra o SchemaValidator, RenderEngine e lógica de Versionamento Semântico.
+ * Serviço de Aplicação que orquestra as regras de negócio de templates.
+ * Implementa as lógicas de imutabilidade, versionamento semântico e auditoria.
  */
 @Service
 @RequiredArgsConstructor
@@ -27,6 +26,9 @@ public class TemplateService {
     private final SchemaValidator schemaValidator;
     private final RenderEngine renderEngine;
 
+    /**
+     * Cria um novo template com uma versão inicial em rascunho (1.0.0).
+     */
     @Transactional
     public NotificationTemplate createTemplate(String name, String description, Channel channel, String orgId, String workspaceId) {
         NotificationTemplate template = NotificationTemplate.builder()
@@ -36,15 +38,15 @@ public class TemplateService {
                 .orgId(orgId)
                 .workspaceId(workspaceId)
                 .status(TemplateStatus.ACTIVE)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
                 .build();
 
         TemplateVersion initialVersion = TemplateVersion.builder()
                 .id(UUID.randomUUID().toString())
                 .version(SemanticVersion.initial())
                 .estado(VersionState.DRAFT)
-                .createdAt(LocalDateTime.now())
+                .createdAt(OffsetDateTime.now())
                 .build();
 
         template.addVersion(initialVersion);
@@ -52,54 +54,56 @@ public class TemplateService {
     }
 
     /**
-     * Atualiza um template.
-     * Se a última versão for DRAFT, sobrescreve.
-     * Se for PUBLISHED, cria uma nova versão (Patch ou Minor) baseada no schema.
+     * Atualiza o conteúdo de um template.
+     * Se a última versão estiver em DRAFT, ela é modificada.
+     * Se estiver PUBLISHED, uma nova versão semântica é criada automaticamente.
      */
     @Transactional
     public NotificationTemplate updateTemplate(String id, String subject, String body, List<InputVariable> schema, String changelog) {
         NotificationTemplate template = getById(id);
 
         TemplateVersion latest = template.getVersions().stream()
-                .max((v1, v2) -> v1.getVersion().compareTo(v2.getVersion()))
+                .max(TemplateVersion::compareTo)
                 .orElseThrow(() -> new BusinessException("Versão não encontrada", "VERSION_NOT_FOUND"));
 
         if (latest.getEstado() == VersionState.DRAFT) {
-            // Regra: Rascunhos são mutáveis
-            latest.setSubject(subject);
-            latest.setBody(body);
-            latest.setInputSchema(schema);
-            latest.setChangelog(changelog);
-            latest.setCreatedAt(LocalDateTime.now());
+            atualizarRascunho(latest, subject, body, schema, changelog);
         } else {
-            // Regra: Versões Publicadas são IMUTÁVEIS. Criamos a próxima.
-            SemanticVersion nextVersion = calculateNextVersion(latest, schema);
-
-            TemplateVersion newVersion = TemplateVersion.builder()
-                    .id(UUID.randomUUID().toString())
-                    .version(nextVersion)
-                    .subject(subject)
-                    .body(body)
-                    .inputSchema(schema)
-                    .estado(VersionState.DRAFT)
-                    .changelog(changelog)
-                    .createdAt(LocalDateTime.now())
-                    .build();
-
-            template.addVersion(newVersion);
+            criarNovaVersao(template, latest, subject, body, schema, changelog);
         }
 
-        template.setUpdatedAt(LocalDateTime.now());
+        template.setUpdatedAt(OffsetDateTime.now());
         return templateRepository.save(template);
     }
 
-    private SemanticVersion calculateNextVersion(TemplateVersion latest, List<InputVariable> newSchema) {
-        // Se o schema mudou (variáveis novas, tipos ou obrigatoriedade) -> Incremento Minor (X.Y.0)
-        if (!latest.getInputSchema().equals(newSchema)) {
-            return latest.getVersion().nextMinor();
-        }
-        // Se apenas o corpo/assunto mudou -> Incremento Patch (X.Y.Z)
-        return latest.getVersion().nextPatch();
+    /**
+     * Executa a renderização de um template para um conjunto de destinatários.
+     * Realiza validação de schema, substituição de variáveis e gera log de auditoria.
+     */
+    @Transactional
+    public NotificationExecution executeTemplate(String templateId, String versionId, List<String> recipients, Map<String, Object> variables) {
+        NotificationTemplate template = getById(templateId);
+        TemplateVersion version = localizarVersaoParaExecucao(template, versionId);
+
+        // Validação clínica de tipos e obrigatoriedade
+        schemaValidator.validate(version.getInputSchema(), variables);
+
+        // Renderização com proteção contra XSS se for canal de E-mail
+        boolean deveEscaparHtml = template.getChannel() == Channel.EMAIL;
+        String content = renderEngine.render(version.getBody(), variables, deveEscaparHtml);
+
+        NotificationExecution execution = NotificationExecution.builder()
+                .id(UUID.randomUUID().toString())
+                .templateId(templateId)
+                .versionId(version.getId())
+                .recipients(recipients)
+                .variables(variables)
+                .renderedContent(content)
+                .status(ExecutionStatus.SUCCESS)
+                .executedOn(OffsetDateTime.now())
+                .build();
+
+        return executionRepository.save(execution);
     }
 
     public NotificationTemplate getById(String id) {
@@ -108,44 +112,9 @@ public class TemplateService {
     }
 
     @Transactional
-    public NotificationExecution executeTemplate(String templateId, String versionId, List<String> recipients, Map<String, Object> variables) {
-        NotificationTemplate template = getById(templateId);
-        TemplateVersion version = findVersion(template, versionId);
-
-        schemaValidator.validate(version.getInputSchema(), variables);
-        String renderedBody = renderEngine.render(version.getBody(), variables);
-
-        NotificationExecution execution = NotificationExecution.builder()
-                .id(UUID.randomUUID().toString())
-                .templateId(templateId)
-                .versionId(version.getId())
-                .recipients(recipients)
-                .variables(variables)
-                .renderedContent(renderedBody)
-                .status(ExecutionStatus.SUCCESS)
-                .executedOn(LocalDateTime.now())
-                .build();
-
-        return executionRepository.save(execution);
-    }
-
-    private TemplateVersion findVersion(NotificationTemplate template, String versionId) {
-        if (versionId != null) {
-            return template.getVersions().stream()
-                    .filter(v -> v.getId().equals(versionId))
-                    .findFirst()
-                    .orElseThrow(() -> new BusinessException("Versão não encontrada", "VERSION_NOT_FOUND"));
-        }
-
-        return template.getVersions().stream()
-                .filter(TemplateVersion::isPublished)
-                .max((v1, v2) -> v1.getVersion().compareTo(v2.getVersion()))
-                .orElseThrow(() -> new BusinessException("Nenhuma versão publicada encontrada", "NO_PUBLISHED_VERSION"));
-    }
-
-    @Transactional
     public NotificationTemplate publishVersion(String templateId, String versionId) {
         NotificationTemplate template = getById(templateId);
+
         TemplateVersion version = template.getVersions().stream()
                 .filter(v -> v.getId().equals(versionId))
                 .findFirst()
@@ -156,7 +125,47 @@ public class TemplateService {
         }
 
         version.setEstado(VersionState.PUBLISHED);
-        template.setUpdatedAt(LocalDateTime.now());
+        template.setUpdatedAt(OffsetDateTime.now());
         return templateRepository.save(template);
+    }
+
+    private void atualizarRascunho(TemplateVersion draft, String subject, String body, List<InputVariable> schema, String changelog) {
+        draft.setSubject(subject);
+        draft.setBody(body);
+        draft.setInputSchema(schema);
+        draft.setChangelog(changelog);
+        draft.setCreatedAt(OffsetDateTime.now());
+    }
+
+    private void criarNovaVersao(NotificationTemplate template, TemplateVersion latest, String subject, String body, List<InputVariable> schema, String changelog) {
+        // Incremento Minor se o schema mudar (quebra de contrato), caso contrário Patch
+        SemanticVersion nextVersion = !latest.getInputSchema().equals(schema)
+                ? latest.getVersion().nextMinor()
+                : latest.getVersion().nextPatch();
+
+        template.addVersion(TemplateVersion.builder()
+                .id(UUID.randomUUID().toString())
+                .version(nextVersion)
+                .subject(subject)
+                .body(body)
+                .inputSchema(schema)
+                .estado(VersionState.DRAFT)
+                .changelog(changelog)
+                .createdAt(OffsetDateTime.now())
+                .build());
+    }
+
+    private TemplateVersion localizarVersaoParaExecucao(NotificationTemplate template, String versionId) {
+        if (versionId != null) {
+            return template.getVersions().stream()
+                    .filter(v -> v.getId().equals(versionId))
+                    .findFirst()
+                    .orElseThrow(() -> new BusinessException("Versão não encontrada", "VERSION_NOT_FOUND"));
+        }
+
+        return template.getVersions().stream()
+                .filter(TemplateVersion::isPublished)
+                .max(TemplateVersion::compareTo)
+                .orElseThrow(() -> new BusinessException("Nenhuma versão publicada disponível", "NO_PUBLISHED_VERSION"));
     }
 }

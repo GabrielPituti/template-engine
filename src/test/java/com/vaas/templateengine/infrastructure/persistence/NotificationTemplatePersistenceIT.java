@@ -11,13 +11,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.time.LocalDateTime;
-import java.util.Optional;
+import java.time.OffsetDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Teste de Integração: Valida Persistência e Proteção contra Race Conditions.
+ * Testes de integração para a camada de persistência.
+ * Valida o comportamento do banco de dados e controle de concorrência.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -27,6 +27,9 @@ class NotificationTemplatePersistenceIT {
     @Autowired
     private NotificationTemplateRepository repository;
 
+    /**
+     * Valida o ciclo básico de persistência e recuperação de um agregado.
+     */
     @Test
     @DisplayName("Deve salvar e recuperar um template com sucesso")
     void shouldSaveAndRetrieveTemplate() {
@@ -36,33 +39,34 @@ class NotificationTemplatePersistenceIT {
                 .orgId("org-1")
                 .workspaceId("wp-1")
                 .status(TemplateStatus.ACTIVE)
-                .createdAt(LocalDateTime.now())
+                .createdAt(OffsetDateTime.now())
                 .build();
 
         NotificationTemplate saved = repository.save(template);
         assertNotNull(saved.getId());
-        assertEquals(0L, saved.getInternalVersion()); // Primeira versão é 0
+        assertEquals(0L, saved.getInternalVersion());
     }
 
+    /**
+     * Valida se o controle de concorrência otimista (Optimistic Locking) impede
+     * que edições simultâneas sobreescrevam dados incorretamente.
+     */
     @Test
     @DisplayName("Deve lançar OptimisticLockingFailureException em caso de edições simultâneas")
     void shouldHandleRaceConditionWithOptimisticLocking() {
-        // 1. Salva um template original
         NotificationTemplate original = repository.save(NotificationTemplate.builder()
                 .name("Race Test")
                 .orgId("org-1")
                 .status(TemplateStatus.ACTIVE)
+                .createdAt(OffsetDateTime.now())
                 .build());
 
-        // 2. Simula duas instâncias carregando o mesmo documento
         NotificationTemplate inst1 = repository.findById(original.getId()).get();
         NotificationTemplate inst2 = repository.findById(original.getId()).get();
 
-        // 3. Primeira instância atualiza com sucesso
         inst1.setName("Update 1");
         repository.save(inst1);
 
-        // 4. Segunda instância tenta atualizar com a versão antiga -> Deve falhar
         inst2.setName("Update 2");
         assertThrows(OptimisticLockingFailureException.class, () -> {
             repository.save(inst2);

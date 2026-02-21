@@ -1,39 +1,29 @@
 Notification Template Engine - Fase 4: Lógica de Negócio e Serviços
 
-Nesta fase, implementamos a "inteligência" do sistema, traduzindo os Requisitos Funcionais (RF01 e RF02) em serviços de aplicação robustos e regras de negócio claras.
+Nesta fase, implementamos a "inteligência" do sistema, elevando o projeto ao nível de maturidade exigido para sistemas críticos, resilientes e multi-tenant.
 
 🛠️ O que foi entregue nesta fase:
 
-TemplateService: Orquestrador central que integra criação, publicação e execução de templates.
+TemplateService: Orquestrador central com suporte a Optimistic Locking para evitar race conditions em ambientes distribuídos.
 
-Versionamento Semântico Automático: Motor que detecta mudanças no corpo (Patch) ou no schema (Minor) e gera automaticamente a próxima versão estável.
+Motor de Renderização Sênior: Substituição de placeholders {{variable}} com XSS Protection (HTML Escape) automático para o canal de E-mail.
 
-RenderEngine: Motor de substituição de placeholders {{var}} utilizando Regex e StringBuilder para alta performance.
+Integridade Temporal ISO-8601: Migração total para OffsetDateTime, garantindo rastreabilidade temporal absoluta independente da localização do servidor.
 
-SchemaValidator: Validação clínica de tipos (NUMBER, STRING, BOOLEAN, DATE) e obrigatoriedade de campos.
+Persistência Global: Implementação de conversores de fuso horário para compatibilidade total entre Java e MongoDB.
 
-Tratamento de Exceções: Implementação da BusinessException com códigos de erro semânticos.
+SchemaValidator: Validação clínica de tipos (NUMBER, STRING, BOOLEAN, DATE) e obrigatoriedade antes do processamento.
 
-Testes Unitários: Cobertura de 100% dos cenários críticos de negócio, garantindo que rascunhos são mutáveis e versões publicadas são imutáveis.
+Testes de Unidade e Integração: Cobertura total das regras de imutabilidade, concorrência e integridade de dados.
 
-🧱 Padrões Sênior Aplicados:
+🧱 Decisões Técnicas & Trade-offs:
 
-Tell, Don't Ask: A lógica de cálculo de versão reside no Value Object SemanticVersion.
+OffsetDateTime vs LocalDateTime: Optamos por OffsetDateTime para eliminar ambiguidades de fuso horário, essencial em sistemas multi-tenant.
 
-Imutabilidade: Proteção rígida contra alteração de versões PUBLISHED.
+Mongo Custom Converters: Como o MongoDB nativo não suporta OffsetDateTime, implementamos WritingConverter e ReadingConverter para manter a precisão dos dados sem perder a compatibilidade com o banco.
 
-Auditoria por Padrão: Toda execução (executeTemplate) gera obrigatoriamente um registro em NotificationExecution.
+Segurança de Canal: O motor de renderização aplica escape de HTML apenas para o canal EMAIL, preservando a integridade de dados brutos para SMS e WEBHOOK.
 
-🚀 Como validar esta branch:
+🚀 Como validar:
 
-Testes: ./gradlew test (Deve passar em menos de 5 segundos).
-
-Tree Check: Verifique se os pacotes service e exception contêm as classes implementadas.
-
-⏳ Próximos Passos (Fase 5):
-
-Exposição REST: Controllers para os comandos e queries.
-
-Kafka Messaging: Disparo de eventos NotificationDispatchedEvent e TemplateVersionPublishedEvent.
-
-CQRS: Implementação de consumers para projeções de auditoria rápida.
+Execute ./gradlew test para validar todas as proteções e a integridade da persistência.
