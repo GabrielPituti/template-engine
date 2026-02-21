@@ -1,49 +1,54 @@
 Notification Template Engine - Fase 5: API, Mensageria e Diferenciais
 
-Nesta fase final, transformamos o motor de templates em um serviço distribuído e acessível, integrando a camada de exposição REST com eventos de alta performance e otimizações de nível Big Tech.
+Esta fase do projeto consolida a transformação do motor de templates num serviço distribuído, resiliente e de alta performance, estabelecendo as bases para a camada de exposição REST com eventos assíncronos e otimizações de nível sênior.
 
-🛠️ O que está sendo entregue nesta fase:
+🛠️ O que foi consolidado nesta etapa:
 
-API RESTful Contract-First: Implementação dos controllers baseada na especificação OpenAPI 3.1, garantindo contratos rigorosos.
+Segurança Clínica (ReDoS & XSS): O motor de renderização foi blindado com expressões regulares não-gananciosas e limites estritos de tamanho de conteúdo (MAX_CONTENT_LENGTH), além de proteção automática contra injeção de scripts para o canal de e-mail.
 
-Mensageria com Kafka (KRaft): Disparo de eventos de domínio (TemplateCreated, NotificationDispatched, etc.) para integração assíncrona.
+Infraestrutura de Cache (Caffeine): Implementação de cache local para templates em estado PUBLISHED, reduzindo drasticamente a latência em cenários de alta volumetria e minimizando o I/O no MongoDB.
 
-Estratégia de CQRS: Separação entre o fluxo de escrita (Comandos) e o fluxo de leitura (Projeções/Views), otimizando consultas de auditoria.
+Fundação de Mensageria (Domain Events): Definição da hierarquia de eventos de domínio utilizando Sealed Interfaces do Java 21, garantindo que apenas eventos autorizados e tipados sejam disparados para o Kafka.
 
-Cache de Alta Performance (Caffeine): Redução drástica de latência em execuções de templates publicados, minimizando acessos ao MongoDB.
+Mapeamento Profissional (MapStruct): Configuração do motor de mapeamento para assegurar o desacoplamento total entre o Core de Domínio e os DTOs de entrada e saída.
 
-Mapeamento Profissional (MapStruct): Desacoplamento total entre as entidades de domínio e os DTOs de entrada/saída.
+Resiliência nos Testes (Testcontainers): Ajuste de visibilidade e configuração das instâncias dinâmicas de MongoDB e Kafka, garantindo que o build seja 100% reprodutível em qualquer ambiente com Docker.
 
-Validação Clínica (Bean Validation): Garantia de integridade dos dados na borda da aplicação (Fail-Fast).
+Tratamento de Concorrência (HTTP 409): Mapeamento global de falhas de Optimistic Locking para respostas semânticas de conflito, orientando o cliente da API sobre race conditions.
 
 🧱 Decisões Técnicas & Trade-offs:
 
-Event-Driven Architecture: O uso de eventos permite que sistemas externos reajam a notificações sem onerar o fluxo principal de renderização.
+Invalidação de Cache: Optou-se pela estratégia de @CacheEvict sincronizada com o ciclo de vida de publicação de versões, garantindo consistência eventual imediata para o motor de execução.
 
-Idempotência de Consumo: Os consumers do Kafka foram projetados para serem idempotentes, evitando duplicidade de registros de auditoria em casos de reentrega de mensagens.
+Backtracking Controlado: A escolha por um motor Regex customizado, em detrimento de bibliotecas pesadas, justifica-se pela economia de memória heap, sendo a segurança garantida pela validação prévia de profundidade e tamanho do template.
 
-Invalidação de Cache: Implementada a estratégia de CacheEvict no momento da publicação de novas versões, garantindo que o motor nunca utilize templates obsoletos.
+Event-Driven Foundation: A estrutura de eventos foi desenhada para suportar o padrão Outbox, assegurando que o estado do banco e o despacho de mensagens permaneçam íntegros.
 
-🚀 Como validar:
+🚀 Como Validar
 
-Testcontainers: Os testes de integração validam o fluxo completo, desde a API até a persistência e o disparo de mensagens no Kafka.
+Execução dos Testes
 
-Swagger UI: Disponível em http://localhost:8080/swagger-ui.html para testes manuais dos endpoints.
+Para validar a integridade da persistência, segurança do motor e a infraestrutura de containers, execute no terminal do IntelliJ:
 
-Kafdrop: Monitore os tópicos e mensagens em tempo real via http://localhost:9000.
+./gradlew test
 
-🛠️ Troubleshooting (Resolução de Problemas)
 
-Erro de Conexão com Docker (Testcontainers)
+Monitorização da Infraestrutura
 
-Caso ocorra um IllegalStateException ou MongoTimeoutException durante os testes:
+Swagger UI: http://localhost:8080/swagger-ui.html (Em breve com endpoints ativos).
 
-Certifique-se de que o Docker Desktop está em execução.
+Kafdrop: http://localhost:9000 (Monitoramento de tópicos).
 
-Verifique se o comando docker ps funciona no seu terminal.
+MongoDB Compass: Conectar em mongodb://localhost:27017.
 
-No Windows, garanta que a opção "Expose daemon on tcp://localhost:2375 without TLS" no Docker Desktop esteja desmarcada (o Testcontainers prefere o npipe padrão) ou, se necessário, configurada corretamente no seu shell.
+🛠️ Troubleshooting
 
-Importante: Verifique se a sua classe de teste de integração possui a anotação @Import(TestcontainersConfiguration.class). Sem isso, o Spring não saberá como se conectar aos containers dinâmicos criados para o teste.
+Falha no Testcontainers
 
-Utilize o terminal integrado do IntelliJ para garantir que as variáveis de ambiente do SDK sejam carregadas corretamente.
+Caso os testes falhem por timeout ou conexão:
+
+Valide se o Docker Desktop está funcional (docker ps).
+
+Utilize o terminal da IDE para garantir que as variáveis de ambiente (JAVA_HOME) estão corretamente mapeadas para o SDK 21.
+
+Status: Build Successful 🟢 | Infraestrutura e Segurança Consolidadas ✅
