@@ -11,7 +11,7 @@ spring:
   data:
     mongodb:
       database: template_engine
-      # Garante que o driver use a convenção de camelCase para compatibilidade com os modelos
+      # Mantém compatibilidade com o formato de UUID legado do Mongo se necessário
       uuid-representation: java_legacy
 
   kafka:
@@ -20,22 +20,28 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     consumer:
-      group-id: template-engine-group
+      group-id: template-engine-stats
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "com.vaas.templateengine.domain.event"
 
-# Configuração do SpringDoc para OpenAPI 3.1 e Swagger UI
+  cache:
+    type: caffeine
+    cache-names: templates
+
+# Configuração do SpringDoc para OpenAPI 3.1
 springdoc:
   api-docs:
     path: /v3/api-docs
   swagger-ui:
+    # URL amigável para acessar a documentação
     path: /swagger-ui.html
+    # Ordena os endpoints por método HTTP no Swagger
     operationsSorter: method
-    tagsSorter: alpha
-    # Habilita o acesso ao arquivo openapi.yaml se ele estiver em static/
+    # Faz o Swagger UI ler o nosso arquivo estático (Contract-First)
+    # Certifique-se de salvar o openapi.yaml em src/main/resources/static/
     url: /openapi.yaml
 
 server:

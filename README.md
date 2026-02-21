@@ -1,58 +1,54 @@
 Notification Template Engine - Fase 5: API, Mensageria e Diferenciais Sênior
 
-Esta fase final consolida a transformação do motor de templates num serviço distribuído, resiliente e de alta performance. O projeto não apenas cumpre os requisitos funcionais, mas implementa diferenciais de engenharia que garantem a segurança e a escalabilidade em ambientes multi-tenant de alta volumetria.
+Esta branch consolida a transformação do motor de templates em um serviço distribuído, resiliente e de alta performance, integrando a camada de exposição REST com eventos assíncronos e a separação de responsabilidades via CQRS.
 
-🛠️ O que está sendo entregue (Foco em Excelência)
+🛠️ Implementações Consolidadas (Fevereiro 2026)
 
-API RESTful & Mapeamento Profissional: Exposição de endpoints via Spring Web, utilizando MapStruct para garantir que o modelo de banco de dados (Entidades) nunca vaze para o consumidor da API (DTOs).
+API Contract-First com OpenAPI 3.1: Documentação técnica rigorosa disponível via Swagger UI, permitindo testes funcionais imediatos dos contratos.
 
-Segurança ReDoS & XSS: Motor de renderização blindado contra Regular Expression Denial of Service através de limites de tamanho (MAX_CONTENT_LENGTH) e regex não-gananciosa. Proteção ativa contra Cross-Site Scripting no canal de e-mail.
+Busca Paginada com Filtros Dinâmicos: Implementação do GET /v1/templates com suporte a paginação e filtros opcionais por channel e status, utilizando queries otimizadas no MongoDB.
 
-Performance com Caffeine Cache: Implementação de cache em memória para templates publicados. Estratégia de consistência garantida via @CacheEvict em operações de publicação e arquivamento.
+Padrão CQRS (Read Model Projections): Separação entre o fluxo de escrita e leitura. Um Kafka Consumer processa eventos de despacho e atualiza uma View de Estatísticas (TemplateStatsView) de forma assíncrona.
 
-Mensageria com Kafka (KRaft): Disparo de eventos de domínio utilizando Sealed Interfaces do Java 21, permitindo uma integração assíncrona e desacoplada para auditoria e projeções CQRS.
+Performance com Caffeine Cache: Camada de cache local para templates publicados, garantindo latência mínima no motor de renderização.
 
-Integridade de Dados: Uso de OffsetDateTime para rastreabilidade global e Optimistic Locking (@Version) para prevenir conflitos de escrita (Race Conditions).
+Segurança Avançada: Blindagem do RenderEngine contra ataques de ReDoS e sanitização automática de HTML (XSS Protection) para o canal de e-mail.
 
-🧱 Decisões Técnicas & Trade-offs (Para Defesa em Entrevista)
+Mapeamento com MapStruct: Desacoplamento total entre as entidades de domínio e os DTOs de API, suportando inclusive Value Objects complexos (SemanticVersion).
 
-Por que Motor Regex Customizado?
+🧱 Decisões Técnicas e Defesa
 
-Argumento: Bibliotecas como Freemarker possuem um overhead de memória significativo. Optamos por uma implementação leve com StringBuilder para reduzir pausas de Garbage Collection em cenários de alta carga.
+Por que CQRS para Estatísticas?
 
-Por que Sealed Interfaces nos Eventos?
+Argumento: Em sistemas de alta volumetria, contar registros em uma tabela de logs de milhões de linhas é proibitivo. A projeção de leitura permite que o endpoint de /stats responda em tempo constante ($O(1)$).
 
-Argumento: Garante segurança de tipos em tempo de compilação e exaustividade no processamento de eventos, seguindo as melhores práticas do Java moderno.
+Por que Swagger com Static OpenAPI?
 
-Resiliência do Pipeline (CI/CD):
-
-Argumento: Optamos pelo uso exclusivo de Testcontainers no pipeline de integração contínua, eliminando a necessidade de scripts manuais de Docker Compose no CI e garantindo que os testes sejam agnósticos ao ambiente.
+Argumento: Garante que o código siga fielmente o contrato desenhado (Contract-First), facilitando a integração com times de Frontend e outros microsserviços.
 
 🚀 Como Validar
 
-Execução de Testes de Alta Fidelidade
+1. Subir a Infraestrutura
 
-Utilizamos Testcontainers para validar o fluxo real de persistência e mensageria:
+docker-compose up -d
+
+
+2. Executar a Aplicação
+
+./gradlew bootRun
+
+
+3. Acessar Documentação e Monitoramento
+
+Swagger UI: http://localhost:8080/swagger-ui.html
+
+Kafdrop: http://localhost:9000 (Verifique os tópicos de eventos).
+
+Actuator Health: http://localhost:8080/actuator/health
+
+4. Testes de Integração
 
 ./gradlew test
 
 
-Monitorização
-
-Swagger UI: http://localhost:8080/swagger-ui.html
-
-Kafdrop: http://localhost:9000 (Visualização de eventos em tempo real).
-
-🛠️ Troubleshooting (Resolução de Problemas)
-
-Erros de Docker/Testcontainers no CI (GitHub Actions)
-
-Caso o teste falhe com ContainerLaunchException ou LogMessageWaitStrategy:
-
-Conflito de Infraestrutura: Verifique se o CI não está tentando subir containers via Docker Compose manualmente. O Testcontainers deve ser o único responsável pela infra durante os testes para evitar contenção de recursos.
-
-Visibilidade da Configuração: Garanta que TestcontainersConfiguration é public para que o Spring consiga injetar as propriedades de conexão dinâmicas corretamente.
-
-Timeout de Inicialização: Em ambientes de CI limitados, imagens "native" podem demorar mais para sinalizar prontidão. A simplificação do pipeline resolve a maioria desses casos.
-
-Status da Branch: Build Successful Local 🟢 | Pipeline CI em Otimização ⚙️
+Status Final da Fase 5: 100% Concluído 🟢 | Build Successful ✅

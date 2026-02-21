@@ -1,0 +1,128 @@
+openapi: 3.1.0
+info:
+  title: Notification Template Engine API
+  version: 1.0.0
+  description: |
+    API Multi-tenant para gestão e execução de templates de notificação.
+    Suporta versionamento semântico, renderização segura (ReDoS/XSS) e métricas via CQRS.
+
+servers:
+  - url: http://localhost:8080
+    description: Servidor Local de Desenvolvimento
+
+paths:
+  /v1/templates:
+    post:
+      summary: Cria um novo template
+      tags: [Templates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTemplateRequest'
+      responses:
+        '201':
+          description: Template criado com sucesso
+        '400':
+          description: Erro de validação nos campos fornecidos
+
+    get:
+      summary: Lista templates com paginação e filtros
+      tags: [Templates]
+      parameters:
+        - name: orgId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: workspaceId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: channel
+          in: query
+          schema:
+            type: string
+            enum: [EMAIL, SMS, WEBHOOK]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, ARCHIVED]
+      responses:
+        '200':
+          description: Lista paginada de templates
+
+  /v1/templates/{id}:
+    get:
+      summary: Busca detalhes de um template por ID
+      tags: [Templates]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detalhes do template encontrados
+
+  /v1/templates/{id}/execute:
+    post:
+      summary: Executa a renderização e registra o log
+      tags: [Execução]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionRequest'
+      responses:
+        '200':
+          description: Conteúdo renderizado com sucesso
+
+  /v1/templates/{id}/stats:
+    get:
+      summary: Recupera estatísticas consolidadas (CQRS)
+      tags: [Métricas]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Estatísticas de envio do template
+
+components:
+  schemas:
+    CreateTemplateRequest:
+      type: object
+      required: [name, channel, orgId, workspaceId]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        channel: { type: string, enum: [EMAIL, SMS, WEBHOOK] }
+        orgId: { type: string }
+        workspaceId: { type: string }
+
+    ExecutionRequest:
+      type: object
+      required: [recipients, variables]
+      properties:
+        templateVersionId: { type: string }
+        recipients:
+          type: array
+          items: { type: string }
+        variables:
+          type: object
+          additionalProperties: true
