@@ -29,8 +29,7 @@ public class TemplateService {
     private final RenderEngine renderEngine;
 
     /**
-     * Cria um novo template com sua versão inicial em estado de rascunho.
-     * * @return O template persistido com a versão 1.0.0.
+     * Cria um novo template com sua versão inicial em estado de rascunho (1.0.0).
      */
     @Transactional
     public NotificationTemplate createTemplate(String name, String description, Channel channel, String orgId, String workspaceId) {
@@ -49,6 +48,8 @@ public class TemplateService {
                 .id(UUID.randomUUID().toString())
                 .version(SemanticVersion.initial())
                 .estado(VersionState.DRAFT)
+                .body("Bem-vindo {{nome}}") // Exemplo inicial
+                .inputSchema(List.of(new InputVariable("nome", VariableType.STRING, true)))
                 .createdAt(OffsetDateTime.now())
                 .build();
 
@@ -58,9 +59,7 @@ public class TemplateService {
 
     /**
      * Recupera um template por identificador único.
-     * Utiliza cache para otimizar leituras repetitivas em execuções de alta volumetria.
-     * * @param id Identificador do template.
-     * @return O template encontrado.
+     * Utiliza cache para otimizar leituras em execuções de alta volumetria.
      */
     @Cacheable(value = "templates", key = "#id")
     public NotificationTemplate getById(String id) {
@@ -70,7 +69,6 @@ public class TemplateService {
 
     /**
      * Publica uma versão específica, tornando-a imutável e pronta para execução.
-     * Invalida o cache para garantir que a próxima execução utilize o estado atualizado.
      */
     @Transactional
     @CacheEvict(value = "templates", key = "#templateId")
@@ -92,18 +90,38 @@ public class TemplateService {
     }
 
     /**
+     * Arquiva um template (Soft Delete) conforme exigido no RF01.
+     */
+    @Transactional
+    @CacheEvict(value = "templates", key = "#templateId")
+    public void archiveTemplate(String templateId) {
+        templateRepository.deleteById(templateId);
+    }
+
+    /**
      * Executa a renderização do template e registra o log de auditoria.
-     * * @return O registro da execução realizada.
      */
     @Transactional
     public NotificationExecution executeTemplate(String templateId, String versionId, List<String> recipients, Map<String, Object> variables) {
         NotificationTemplate template = getById(templateId);
+
+        if (template.getStatus() == TemplateStatus.ARCHIVED) {
+            throw new BusinessException("Não é possível executar um template arquivado", "TEMPLATE_ARCHIVED");
+        }
+
         TemplateVersion version = findVersionForExecution(template, versionId);
 
-        schemaValidator.validate(version.getInputSchema(), variables);
+        ExecutionStatus status = ExecutionStatus.SUCCESS;
+        String renderedBody;
 
-        boolean shouldEscapeHtml = template.getChannel() == Channel.EMAIL;
-        String renderedBody = renderEngine.render(version.getBody(), variables, shouldEscapeHtml);
+        try {
+            schemaValidator.validate(version.getInputSchema(), variables);
+            boolean shouldEscapeHtml = template.getChannel() == Channel.EMAIL;
+            renderedBody = renderEngine.render(version.getBody(), variables, shouldEscapeHtml);
+        } catch (BusinessException e) {
+            status = ExecutionStatus.VALIDATION_ERROR;
+            renderedBody = "Erro de Validação: " + e.getMessage();
+        }
 
         NotificationExecution execution = NotificationExecution.builder()
                 .id(UUID.randomUUID().toString())
@@ -112,7 +130,7 @@ public class TemplateService {
                 .recipients(recipients)
                 .variables(variables)
                 .renderedContent(renderedBody)
-                .status(ExecutionStatus.SUCCESS)
+                .status(status)
                 .executedOn(OffsetDateTime.now())
                 .build();
 

@@ -12,8 +12,8 @@ import org.springframework.stereotype.Component;
 import java.util.Optional;
 
 /**
- * Adapter: Implementação da interface de domínio usando o Spring Data Mongo.
- * Aqui fazemos a ponte entre o 'Port' e o 'Spring Data'.
+ * Adapter que conecta o Port de domínio à implementação específica do Spring Data MongoDB.
+ * Encapsula a lógica de tradução entre o domínio e a infraestrutura.
  */
 @Component
 @RequiredArgsConstructor
@@ -31,14 +31,25 @@ public class TemplateRepositoryAdapter implements NotificationTemplateRepository
         return repository.findById(id);
     }
 
+    /**
+     * Implementação da busca filtrada utilizando a query dinâmica do repositório Mongo.
+     */
     @Override
-    public Page<NotificationTemplate> findAll(String orgId, String workspaceId, Channel channel, TemplateStatus status, Pageable pageable) {
-        // No futuro, se channel/status forem nulos, a query trata ou filtramos em memória
+    public Page<NotificationTemplate> findAll(
+            String orgId,
+            String workspaceId,
+            Channel channel,
+            TemplateStatus status,
+            Pageable pageable) {
         return repository.findByFilters(orgId, workspaceId, channel, status, pageable);
     }
 
     @Override
     public void deleteById(String id) {
-        repository.deleteById(id);
+        // Implementação de Soft Delete conforme RF01
+        repository.findById(id).ifPresent(template -> {
+            template.setStatus(TemplateStatus.ARCHIVED);
+            repository.save(template);
+        });
     }
 }
