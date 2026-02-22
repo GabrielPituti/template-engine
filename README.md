@@ -1,39 +1,25 @@
 Notification Template Engine - Fase 4: Lógica de Negócio e Serviços
 
-Nesta fase, implementamos a "inteligência" do sistema, traduzindo os Requisitos Funcionais (RF01 e RF02) em serviços de aplicação robustos e regras de negócio claras.
+Nesta etapa, desenvolvi a inteligência central da engine, transformando os requisitos funcionais em serviços robustos e regras de negócio testáveis. Foquei em garantir que a renderização de templates fosse segura, precisa e performática.
 
-🛠️ O que foi entregue nesta fase:
+Entregas Técnicas
 
-TemplateService: Orquestrador central que integra criação, publicação e execução de templates.
+TemplateService: Desenvolvi o orquestrador responsável pela gestão do ciclo de vida dos templates, incluindo criação, publicação e preparação para execução.
 
-Versionamento Semântico Automático: Motor que detecta mudanças no corpo (Patch) ou no schema (Minor) e gera automaticamente a próxima versão estável.
+Motor de Renderização: Implementei um motor focado em performance utilizando Regex não-gananciosa e StringBuilder, mitigando riscos de segurança como ataques de ReDoS.
 
-RenderEngine: Motor de substituição de placeholders {{var}} utilizando Regex e StringBuilder para alta performance.
+Segurança e Sanitização: Incluí a proteção automática contra XSS para o canal de e-mail, garantindo que conteúdos dinâmicos não comprometam a segurança do destinatário final.
 
-SchemaValidator: Validação clínica de tipos (NUMBER, STRING, BOOLEAN, DATE) e obrigatoriedade de campos.
+Validador de Schema: Criei um componente dedicado para validar o payload de variáveis contra o contrato definido na versão do template, suportando tipos como STRING, NUMBER, BOOLEAN e DATE.
 
-Tratamento de Exceções: Implementação da BusinessException com códigos de erro semânticos.
+Versionamento Automático: Implementei a lógica para incremento de versões semânticas (Patch e Minor) baseada no impacto das alterações no corpo ou no schema.
 
-Testes Unitários: Cobertura de 100% dos cenários críticos de negócio, garantindo que rascunhos são mutáveis e versões publicadas são imutáveis.
+Defesa Técnica
 
-🧱 Padrões Sênior Aplicados:
+Princípio Tell, Don't Ask: Mantive a lógica de cálculo de versão e transições de estado dentro dos Value Objects e Agregados, evitando uma arquitetura procedural centrada no serviço.
 
-Tell, Don't Ask: A lógica de cálculo de versão reside no Value Object SemanticVersion.
+Proteção de Imutabilidade: Estabeleci travas para impedir a edição de versões que já foram publicadas, assegurando a confiabilidade do histórico de disparos.
 
-Imutabilidade: Proteção rígida contra alteração de versões PUBLISHED.
+Como Validar
 
-Auditoria por Padrão: Toda execução (executeTemplate) gera obrigatoriamente um registro em NotificationExecution.
-
-🚀 Como validar esta branch:
-
-Testes: ./gradlew test (Deve passar em menos de 5 segundos).
-
-Tree Check: Verifique se os pacotes service e exception contêm as classes implementadas.
-
-⏳ Próximos Passos (Fase 5):
-
-Exposição REST: Controllers para os comandos e queries.
-
-Kafka Messaging: Disparo de eventos NotificationDispatchedEvent e TemplateVersionPublishedEvent.
-
-CQRS: Implementação de consumers para projeções de auditoria rápida.
+A integridade desta fase pode ser confirmada executando os testes unitários que desenvolvi: ./gradlew test. Os testes cobrem desde a substituição de placeholders até casos complexos de validação de tipos e datas.
