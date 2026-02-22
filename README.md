@@ -1,31 +1,31 @@
 Notification Template Engine - Fase 1: Infraestrutura
 
-Este marco do projeto foca na configuração do ambiente de desenvolvimento e na garantia de que todas as dependências externas estejam isoladas e funcionais via containers.
+Nesta etapa inicial, estabeleci a base tecnológica do projeto para garantir que o ambiente de desenvolvimento fosse padronizado e isolado através de containers. Meu foco principal foi a automação do setup e a garantia de integridade desde o primeiro commit.
 
-🛠️ O que foi entregue nesta fase:
+Entregas Técnicas
 
-Java 21 & Gradle: Configuração do Toolchain moderno e gerenciamento de dependências.
+Configurei o ecossistema Java 21 e Gradle, utilizando as funcionalidades mais recentes da linguagem para garantir um código moderno e eficiente.
 
-Docker Compose: Orquestração do MongoDB e Kafka (modo KRaft).
+Realizei a orquestração de serviços via Docker Compose, integrando o MongoDB para persistência e o Kafka para mensageria.
 
-CI/CD Inicial: Configuração do GitHub Actions para validar builds automaticamente em cada push.
+Implementei o pipeline de Integração Contínua (CI) via GitHub Actions, configurado para validar builds e executar testes automaticamente em cada push ou pull request.
 
-🚀 Como validar esta branch:
+Decisões Técnicas e Fundamentação
 
-Certifique-se de que o Docker Desktop está rodando.
+Kafka em modo KRaft: Optei por utilizar o Kafka sem a dependência do Zookeeper. Essa escolha simplifica a topologia da infraestrutura, reduz o consumo de memória e facilita a manutenção do ambiente, seguindo a tendência atual da comunidade.
 
-Execute: docker-compose up -d
+Integração Nativa Spring Boot: Configurei a aplicação para reconhecer os containers Docker automaticamente durante o tempo de desenvolvimento, eliminando a necessidade de configurações manuais de portas e endereços no ambiente local.
 
-Verifique os serviços:
+Como Validar
+
+Certifique-se de que o Docker Desktop está em execução.
+
+Execute o comando: docker-compose up -d
+
+Os serviços estarão disponíveis nos endereços padrão:
 
 MongoDB: localhost:27017
 
 Kafka: localhost:9092
 
-Kafdrop (Visualizador Kafka): http://localhost:9000
-
-📝 Decisões Técnicas:
-
-Kafka KRaft: Optamos por não usar Zookeeper para simplificar a infraestrutura e reduzir o consumo de memória.
-
-Spring Boot 3.5 Docker Compose: A aplicação está configurada para reconhecer os containers automaticamente durante o desenvolvimento.
+Kafdrop (Visualizador do Kafka): http://localhost:9000
