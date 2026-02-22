@@ -1,70 +1,59 @@
-Notification Template Engine (VaaS Challenge)
+Notification Template Engine
 
-Microsserviço multi-tenant de alto desempenho para gestão, versionamento e execução de templates de notificação (E-mail, SMS, Webhook).
+Este projeto é um microsserviço multi-tenant de alto desempenho que desenvolvi para gerenciar e executar templates de notificação através de múltiplos canais como E-mail, SMS e Webhook. A solução foi construída com foco em escalabilidade, segurança e integridade total dos dados.
 
-🎯 Visão Geral
+Visão Geral e Arquitetura
 
-Este projeto foi desenvolvido com foco em missão crítica, utilizando as melhores práticas de engenharia para garantir integridade de dados, performance de renderização e rastreabilidade total de execuções. A solução resolve o desafio técnico de fornecer uma engine flexível para notificações em contextos de alta volumetria.
+Utilizei a Arquitetura Hexagonal (Ports & Adapters) para garantir que as regras de negócio fossem independentes de tecnologias externas. A modelagem seguiu rigorosamente os padrões de Domain-Driven Design (DDD), tratando o template como um Aggregate Root que protege suas versões e estados internos.
 
-🏗️ Arquitetura
+Diferenciais Técnicos que Implementei
 
-A solução utiliza Arquitetura Hexagonal (Ports & Adapters) e princípios de Domain-Driven Design (DDD) para isolar o domínio das tecnologias de infraestrutura:
+Versionamento Semântico: Controle rígido de versões (Major.Minor.Patch) com bloqueio de edição para conteúdos já publicados.
 
-Domínio: Agregados (NotificationTemplate), Entidades (TemplateVersion), Value Objects (SemanticVersion) e Eventos de Domínio selados.
+Motor de Renderização Seguro: Proteção nativa contra ataques de ReDoS e injeção de scripts (XSS).
 
-Persistência: MongoDB com suporte a fuso horário absoluto (OffsetDateTime) e controlo de concorrência otimista (@Version).
+Mensageria e CQRS: Comunicação assíncrona via Kafka para atualização de projeções de leitura, garantindo performance em consultas analíticas.
 
-Execução: Motor de renderização leve baseado em Regex e StringBuilder com proteções contra ReDoS e XSS.
+Observabilidade: Registro de métricas customizadas via Micrometer para monitoramento granular por organização e canal.
 
-Mensageria: Infraestrutura Kafka (modo KRaft) para comunicação assíncrona e padrões CQRS.
+Performance: Implementação de cache agressivo de leitura para templates estáveis utilizando Caffeine.
 
-Cache: Caffeine para redução drástica de latência na recuperação de templates publicados.
+Stack Tecnológica
 
-🚀 Como Executar o Projeto
+Linguagem: Java 21 (Records, Sealed Interfaces, Pattern Matching)
 
-Pré-requisitos
+Framework: Spring Boot 3.5
 
-Java 21 (Amazon Corretto ou Temurin).
+Persistência: MongoDB
 
-Docker Desktop.
+Mensageria: Kafka (KRaft mode)
 
-Inicialização
+Documentação: OpenAPI 3.1 / Swagger UI
 
-Sobe a infraestrutura necessária (MongoDB, Kafka, Kafdrop):
+Infraestrutura de Testes: Testcontainers e JUnit 5
 
-docker-compose up -d
+Como Executar o Projeto
 
+Certifique-se de possuir o Java 21 e o Docker instalados.
 
-Executa o build completo e os testes de integração (Testcontainers):
+Inicie a infraestrutura: docker-compose up -d
 
-./gradlew build
+Execute a aplicação: ./gradlew bootRun
 
+Acesse a documentação da API em: http://localhost:8080/swagger-ui.html
 
-Inicia a aplicação:
+Estrutura de Desenvolvimento
 
-./gradlew bootRun
+Organizei a entrega de forma incremental através das seguintes branches:
 
+main: Versão consolidada e pronta para produção.
 
-🛠️ Monitoramento e Ferramentas
+feat/infrastructure-setup: Base de containers e CI/CD.
 
-Swagger UI (Documentação API): http://localhost:8080/swagger-ui.html
+feat/domain-persistence: Modelagem e camada de dados.
 
-Kafdrop (Visualizador Kafka): http://localhost:9000
+feat/business-logic: Motor de renderização e versionamento.
 
-Actuator Health: http://localhost:8080/actuator/health
+feat/api-messaging-plus: REST, Kafka, CQRS e Cache.
 
-🌿 Estrutura de Branches (Roadmap Incremental)
-
-O desenvolvimento seguiu uma evolução lógica e documentada em branches semânticas:
-
-main: Versão estável, documentada e consolidada.
-
-feat/infrastructure-setup: Setup de ambiente, Docker e pipeline CI/CD.
-
-feat/domain-persistence: Modelagem DDD e camada de persistência.
-
-feat/business-logic: Motor de renderização, regras de segurança e versionamento.
-
-feat/api-messaging-plus: Camada de exposição REST, Kafka e diferenciais sênior.
-
-Data de Entrega Final: 24/02/2026
+feat/observability-and-review: Métricas, refinamento de DDD e ajustes finais de segurança.
