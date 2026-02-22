@@ -1,8 +1,6 @@
 package com.vaas.templateengine.application.service;
 
-import com.vaas.templateengine.domain.event.NotificationDispatchedEvent;
-import com.vaas.templateengine.domain.event.TemplateArchivedEvent;
-import com.vaas.templateengine.domain.event.TemplateVersionPublishedEvent;
+import com.vaas.templateengine.domain.event.*;
 import com.vaas.templateengine.domain.model.*;
 import com.vaas.templateengine.domain.port.NotificationExecutionRepository;
 import com.vaas.templateengine.domain.port.NotificationTemplateRepository;
@@ -22,8 +20,9 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Orquestrador central da lógica de negócio de templates.
- * Implementa regras de versionamento, imutabilidade, auditoria e diferenciais de performance/observabilidade.
+ * Orquestrador central da lógica de negócio de templates de notificação.
+ * Gerencia o ciclo de vida dos agregados, garantindo a aplicação de regras de
+ * versionamento, imutabilidade, persistência e observabilidade.
  */
 @Slf4j
 @Service
@@ -35,16 +34,20 @@ public class TemplateService {
     private final SchemaValidator schemaValidator;
     private final RenderEngine renderEngine;
     private final NotificationProducer eventProducer;
-
-    /** Diferencial: Registro de métricas para Observabilidade via Micrometer */
     private final MeterRegistry meterRegistry;
 
     /**
-     * Cria um novo template com sua versão inicial em estado de rascunho (1.0.0).
+     * Cria um novo template com sua versão inicial em estado de rascunho.
+     * * @param name Nome do template.
+     * @param description Descrição opcional das finalidades do template.
+     * @param channel Canal de comunicação (EMAIL, SMS, WEBHOOK).
+     * @param orgId Identificador da organização proprietária.
+     * @param workspaceId Identificador do workspace.
+     * @return O agregado NotificationTemplate persistido.
      */
     @Transactional
     public NotificationTemplate createTemplate(String name, String description, Channel channel, String orgId, String workspaceId) {
-        log.info("Criando novo template: {} para a organização: {}", name, orgId);
+        log.info("Iniciando criação do template: {} para a organização: {}", name, orgId);
 
         NotificationTemplate template = NotificationTemplate.builder()
                 .name(name)
@@ -61,19 +64,25 @@ public class TemplateService {
                 .id(UUID.randomUUID().toString())
                 .version(SemanticVersion.initial())
                 .estado(VersionState.DRAFT)
-                .subject("Bem-vindo ao serviço") // Atendendo RF01
+                .subject("Novo Template: " + name)
                 .body("Olá {{nome}}, seu cadastro foi realizado.")
                 .inputSchema(List.of(new InputVariable("nome", VariableType.STRING, true)))
-                .changelog("Setup inicial do template.") // Atendendo RF01
+                .changelog("Setup inicial do template.")
                 .createdAt(OffsetDateTime.now())
                 .build();
 
         template.addVersion(initial);
-        return templateRepository.save(template);
+        NotificationTemplate saved = templateRepository.save(template);
+
+        eventProducer.publish(new TemplateCreatedEvent(saved.getId(), OffsetDateTime.now(), saved.getName()));
+
+        return saved;
     }
 
     /**
-     * Recupera um template por ID. Utiliza Caffeine Cache para alta performance em execuções massivas.
+     * Recupera um template por identificador único com suporte a cache.
+     * * @param id Identificador único do template.
+     * @return O agregado NotificationTemplate encontrado.
      */
     @Cacheable(value = "templates", key = "#id")
     public NotificationTemplate getById(String id) {
@@ -82,7 +91,10 @@ public class TemplateService {
     }
 
     /**
-     * Publica uma versão, tornando-a imutável. Invalida o cache para propagar a alteração.
+     * Publica uma versão específica do template, tornando-a imutável.
+     * * @param templateId Identificador do template.
+     * @param versionId Identificador da versão a ser publicada.
+     * @return O agregado atualizado e persistido.
      */
     @Transactional
     @CacheEvict(value = "templates", key = "#templateId")
@@ -90,7 +102,7 @@ public class TemplateService {
         NotificationTemplate template = getById(templateId);
         TemplateVersion version = template.getVersion(versionId);
 
-        version.publish(); // Lógica encapsulada no domínio
+        version.publish();
         NotificationTemplate saved = templateRepository.save(template);
 
         eventProducer.publish(new TemplateVersionPublishedEvent(templateId, OffsetDateTime.now(), versionId));
@@ -100,13 +112,14 @@ public class TemplateService {
     }
 
     /**
-     * Realiza o Soft Delete (Arquivamento) conforme RF01.
+     * Realiza o arquivamento lógico (Soft Delete) de um template.
+     * * @param templateId Identificador do template a ser arquivado.
      */
     @Transactional
     @CacheEvict(value = "templates", key = "#templateId")
     public void archiveTemplate(String templateId) {
         NotificationTemplate template = getById(templateId);
-        template.archive(); // Proteção de domínio
+        template.archive();
         templateRepository.save(template);
 
         eventProducer.publish(new TemplateArchivedEvent(templateId, OffsetDateTime.now()));
@@ -114,14 +127,17 @@ public class TemplateService {
     }
 
     /**
-     * Executa a renderização do template com validação rigorosa de schema e estado.
-     * Registra métricas de observabilidade para monitoramento em tempo real.
+     * Executa a renderização de um template para um conjunto de variáveis.
+     * * @param templateId Identificador do template.
+     * @param versionId Identificador opcional da versão.
+     * @param recipients Lista de destinatários.
+     * @param variables Mapa de variáveis para renderização.
+     * @return Registro da execução com o conteúdo renderizado e status.
      */
     @Transactional
     public NotificationExecution executeTemplate(String templateId, String versionId, List<String> recipients, Map<String, Object> variables) {
         NotificationTemplate template = getById(templateId);
 
-        // Proteção Sênior: Impedir disparos de templates deletados
         if (template.getStatus() == TemplateStatus.ARCHIVED) {
             recordMetric(template, "ARCHIVED_ERROR");
             throw new BusinessException("Não é possível executar um template arquivado.", "TEMPLATE_ARCHIVED");
@@ -129,7 +145,6 @@ public class TemplateService {
 
         TemplateVersion version = (versionId != null) ? template.getVersion(versionId) : template.getLatestPublishedVersion();
 
-        // Proteção Sênior: Impedir disparos de rascunhos (DRAFT)
         if (!version.isPublished()) {
             recordMetric(template, "DRAFT_ERROR");
             throw new BusinessException("A versão solicitada não está publicada.", "VERSION_NOT_PUBLISHED");
@@ -159,18 +174,16 @@ public class TemplateService {
 
         NotificationExecution saved = executionRepository.save(execution);
 
-        // CQRS: Dispara evento para atualização das visões de leitura
         eventProducer.publish(new NotificationDispatchedEvent(templateId, status.name()));
-
-        // Diferencial: Observabilidade multidimensional
         recordMetric(template, status.name());
 
         return saved;
     }
 
     /**
-     * Helper para registro de métricas via Micrometer.
-     * Permite criar dashboards por Canal e Status no Grafana/Prometheus.
+     * Registra métricas multidimensionais de execução para observabilidade.
+     * * @param template O agregado do template executado.
+     * @param resultStatus O status final do processamento.
      */
     private void recordMetric(NotificationTemplate template, String resultStatus) {
         meterRegistry.counter("notifications.execution.total",
