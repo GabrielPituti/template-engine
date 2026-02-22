@@ -4,6 +4,7 @@ import com.vaas.templateengine.shared.exception.BusinessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -13,28 +14,33 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Centralizador de exceções da infraestrutura web.
- * Implementa o padrão de respostas semânticas exigido em APIs de missão crítica.
+ * Centralizador de exceções. Transforma erros técnicos em respostas amigáveis.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     /**
-     * Trata conflitos de concorrência otimista (Race Conditions).
-     * Mapeia erros de versão do banco para HTTP 409 Conflict.
+     * Captura erros de leitura de JSON (como enviar um texto onde deveria ser um Enum).
+     * Resolve o erro 500 que você recebeu ao testar o Swagger.
      */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleReadableException(HttpMessageNotReadableException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                "timestamp", OffsetDateTime.now(),
+                "code", "INVALID_JSON_FORMAT",
+                "message", "Formato do JSON inválido ou valor de campo (Enum) incorreto. Verifique a documentação."
+        ));
+    }
+
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<Map<String, Object>> handleConflict(OptimisticLockingFailureException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
                 "timestamp", OffsetDateTime.now(),
                 "code", "CONCURRENCY_CONFLICT",
-                "message", "O recurso foi atualizado por outro usuário. Por favor, recarregue os dados e tente novamente."
+                "message", "O recurso foi atualizado por outro usuário."
         ));
     }
 
-    /**
-     * Trata erros de regras de negócio definidos pelo domínio.
-     */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<Map<String, Object>> handleBusinessException(BusinessException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
@@ -44,9 +50,6 @@ public class GlobalExceptionHandler {
         ));
     }
 
-    /**
-     * Trata falhas de validação de contrato (Bean Validation).
-     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationException(MethodArgumentNotValidException ex) {
         String details = ex.getBindingResult().getFieldErrors().stream()
@@ -56,14 +59,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                 "timestamp", OffsetDateTime.now(),
                 "code", "VALIDATION_ERROR",
-                "message", "Campos inválidos na requisição",
+                "message", "Campos inválidos",
                 "details", details
         ));
     }
 
-    /**
-     * Tratamento genérico para falhas inesperadas, garantindo que stacktraces técnicos não vazem na API.
-     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(

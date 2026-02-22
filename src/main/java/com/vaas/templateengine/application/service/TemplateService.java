@@ -1,8 +1,11 @@
 package com.vaas.templateengine.application.service;
 
+import com.vaas.templateengine.domain.event.NotificationDispatchedEvent;
+import com.vaas.templateengine.domain.event.TemplateArchivedEvent;
 import com.vaas.templateengine.domain.model.*;
 import com.vaas.templateengine.domain.port.NotificationExecutionRepository;
 import com.vaas.templateengine.domain.port.NotificationTemplateRepository;
+import com.vaas.templateengine.infrastructure.messaging.NotificationProducer;
 import com.vaas.templateengine.shared.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
@@ -17,7 +20,6 @@ import java.util.UUID;
 
 /**
  * Serviço de aplicação responsável pela orquestração do ciclo de vida de templates.
- * Implementa regras de versionamento, imutabilidade, auditoria e cache de performance.
  */
 @Service
 @RequiredArgsConstructor
@@ -27,10 +29,8 @@ public class TemplateService {
     private final NotificationExecutionRepository executionRepository;
     private final SchemaValidator schemaValidator;
     private final RenderEngine renderEngine;
+    private final NotificationProducer eventProducer;
 
-    /**
-     * Cria um novo template com sua versão inicial em estado de rascunho (1.0.0).
-     */
     @Transactional
     public NotificationTemplate createTemplate(String name, String description, Channel channel, String orgId, String workspaceId) {
         NotificationTemplate template = NotificationTemplate.builder()
@@ -48,8 +48,10 @@ public class TemplateService {
                 .id(UUID.randomUUID().toString())
                 .version(SemanticVersion.initial())
                 .estado(VersionState.DRAFT)
-                .body("Bem-vindo {{nome}}") // Exemplo inicial
+                .subject("Novo Template: " + name)
+                .body("Bem-vindo {{nome}}")
                 .inputSchema(List.of(new InputVariable("nome", VariableType.STRING, true)))
+                .changelog("Versão inicial gerada automaticamente.")
                 .createdAt(OffsetDateTime.now())
                 .build();
 
@@ -57,50 +59,39 @@ public class TemplateService {
         return templateRepository.save(template);
     }
 
-    /**
-     * Recupera um template por identificador único.
-     * Utiliza cache para otimizar leituras em execuções de alta volumetria.
-     */
     @Cacheable(value = "templates", key = "#id")
     public NotificationTemplate getById(String id) {
         return templateRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Template não encontrado", "TEMPLATE_NOT_FOUND"));
     }
 
-    /**
-     * Publica uma versão específica, tornando-a imutável e pronta para execução.
-     */
     @Transactional
     @CacheEvict(value = "templates", key = "#templateId")
     public NotificationTemplate publishVersion(String templateId, String versionId) {
         NotificationTemplate template = getById(templateId);
+        TemplateVersion version = template.getVersion(versionId);
 
-        TemplateVersion version = template.getVersions().stream()
-                .filter(v -> v.getId().equals(versionId))
-                .findFirst()
-                .orElseThrow(() -> new BusinessException("Versão não encontrada", "VERSION_NOT_FOUND"));
+        version.publish();
+        templateRepository.save(template);
 
-        if (version.isPublished()) {
-            throw new BusinessException("Esta versão já está publicada", "VERSION_ALREADY_PUBLISHED");
-        }
+        // Emissão de evento sênior para o Kafka
+        eventProducer.publish(new com.vaas.templateengine.domain.event.TemplateVersionPublishedEvent(templateId, OffsetDateTime.now(), versionId));
 
-        version.setEstado(VersionState.PUBLISHED);
-        template.setUpdatedAt(OffsetDateTime.now());
-        return templateRepository.save(template);
+        return template;
     }
 
-    /**
-     * Arquiva um template (Soft Delete) conforme exigido no RF01.
-     */
     @Transactional
     @CacheEvict(value = "templates", key = "#templateId")
     public void archiveTemplate(String templateId) {
-        templateRepository.deleteById(templateId);
+        // Correção Bug #1: Soft Delete em vez de hard delete.
+        NotificationTemplate template = getById(templateId);
+        template.archive();
+        templateRepository.save(template);
+
+        // Emissão de evento de arquivamento
+        eventProducer.publish(new TemplateArchivedEvent(templateId, OffsetDateTime.now()));
     }
 
-    /**
-     * Executa a renderização do template e registra o log de auditoria.
-     */
     @Transactional
     public NotificationExecution executeTemplate(String templateId, String versionId, List<String> recipients, Map<String, Object> variables) {
         NotificationTemplate template = getById(templateId);
@@ -109,7 +100,12 @@ public class TemplateService {
             throw new BusinessException("Não é possível executar um template arquivado", "TEMPLATE_ARCHIVED");
         }
 
+        // Correção Bug #4: Validar se a versão específica está PUBLISHED
         TemplateVersion version = findVersionForExecution(template, versionId);
+
+        if (!version.isPublished()) {
+            throw new BusinessException("A versão solicitada ainda está em rascunho (DRAFT).", "VERSION_NOT_PUBLISHED");
+        }
 
         ExecutionStatus status = ExecutionStatus.SUCCESS;
         String renderedBody;
@@ -134,20 +130,19 @@ public class TemplateService {
                 .executedOn(OffsetDateTime.now())
                 .build();
 
-        return executionRepository.save(execution);
+        NotificationExecution saved = executionRepository.save(execution);
+
+        // Dispara evento para atualização das estatísticas (CQRS)
+        eventProducer.publish(new NotificationDispatchedEvent(templateId, status.name()));
+
+        return saved;
     }
 
     private TemplateVersion findVersionForExecution(NotificationTemplate template, String versionId) {
         if (versionId != null) {
-            return template.getVersions().stream()
-                    .filter(v -> v.getId().equals(versionId))
-                    .findFirst()
-                    .orElseThrow(() -> new BusinessException("Versão específica não encontrada", "VERSION_NOT_FOUND"));
+            return template.getVersion(versionId);
         }
 
-        return template.getVersions().stream()
-                .filter(TemplateVersion::isPublished)
-                .max(TemplateVersion::compareTo)
-                .orElseThrow(() -> new BusinessException("Nenhuma versão publicada disponível", "NO_PUBLISHED_VERSION"));
+        return template.getLatestPublishedVersion();
     }
 }
