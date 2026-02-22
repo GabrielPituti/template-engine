@@ -1,54 +1,29 @@
-Notification Template Engine - Fase 5: API, Mensageria e Diferenciais Sênior
+Notification Template Engine - Fase 5: API, Mensageria e CQRS
 
-Esta branch consolida a transformação do motor de templates em um serviço distribuído, resiliente e de alta performance, integrando a camada de exposição REST com eventos assíncronos e a separação de responsabilidades via CQRS.
+Esta etapa consolidou a engine como um microsserviço distribuído e resiliente. Trabalhei na integração da exposição REST com a comunicação assíncrona baseada em eventos de domínio.
 
-🛠️ Implementações Consolidadas (Fevereiro 2026)
+Entregas Técnicas
 
-API Contract-First com OpenAPI 3.1: Documentação técnica rigorosa disponível via Swagger UI, permitindo testes funcionais imediatos dos contratos.
+API Contract-First: Desenhei a interface do sistema primeiro via OpenAPI 3.1, garantindo que o contrato da API fosse a fonte única da verdade durante o desenvolvimento.
 
-Busca Paginada com Filtros Dinâmicos: Implementação do GET /v1/templates com suporte a paginação e filtros opcionais por channel e status, utilizando queries otimizadas no MongoDB.
+Arquitetura CQRS: Implementei um fluxo onde comandos alteram o estado e eventos de domínio disparam a atualização de visões de leitura otimizadas.
 
-Padrão CQRS (Read Model Projections): Separação entre o fluxo de escrita e leitura. Um Kafka Consumer processa eventos de despacho e atualiza uma View de Estatísticas (TemplateStatsView) de forma assíncrona.
+Kafka Consumer: Desenvolvi o processamento assíncrono do evento NotificationDispatchedEvent para alimentar uma coleção dedicada de estatísticas de envio.
 
-Performance com Caffeine Cache: Camada de cache local para templates publicados, garantindo latência mínima no motor de renderização.
+Camada de Cache: Utilizei o Caffeine Cache para otimizar a recuperação de templates publicados, reduzindo a latência em cenários de alta volumetria.
 
-Segurança Avançada: Blindagem do RenderEngine contra ataques de ReDoS e sanitização automática de HTML (XSS Protection) para o canal de e-mail.
+MapStruct: Implementei o mapeamento entre as entidades de domínio e os DTOs de resposta, garantindo que detalhes internos da implementação permaneçam isolados.
 
-Mapeamento com MapStruct: Desacoplamento total entre as entidades de domínio e os DTOs de API, suportando inclusive Value Objects complexos (SemanticVersion).
+Decisões Estratégicas
 
-🧱 Decisões Técnicas e Defesa
+Separação de Leitura e Escrita: Adotei o CQRS para as estatísticas para garantir que consultas analíticas pesadas não impactem a performance da base principal de templates.
 
-Por que CQRS para Estatísticas?
+Documentação Viva: Configurei o Swagger UI para ler o contrato OpenAPI estático, facilitando a integração com consumidores externos e mantendo a documentação sempre sincronizada com o código.
 
-Argumento: Em sistemas de alta volumetria, contar registros em uma tabela de logs de milhões de linhas é proibitivo. A projeção de leitura permite que o endpoint de /stats responda em tempo constante ($O(1)$).
-
-Por que Swagger com Static OpenAPI?
-
-Argumento: Garante que o código siga fielmente o contrato desenhado (Contract-First), facilitando a integração com times de Frontend e outros microsserviços.
-
-🚀 Como Validar
-
-1. Subir a Infraestrutura
-
-docker-compose up -d
-
-
-2. Executar a Aplicação
-
-./gradlew bootRun
-
-
-3. Acessar Documentação e Monitoramento
+Como Monitorar
 
 Swagger UI: http://localhost:8080/swagger-ui.html
 
-Kafdrop: http://localhost:9000 (Verifique os tópicos de eventos).
+Visualizador Kafka (Kafdrop): http://localhost:9000
 
-Actuator Health: http://localhost:8080/actuator/health
-
-4. Testes de Integração
-
-./gradlew test
-
-
-Status Final da Fase 5: 100% Concluído 🟢 | Build Successful ✅
+Métricas de Saúde (Actuator): http://localhost:8080/actuator/health
