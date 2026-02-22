@@ -1,6 +1,7 @@
 package com.vaas.templateengine.application.dto;
 
 import com.vaas.templateengine.domain.model.*;
+import com.vaas.templateengine.infrastructure.web.dto.InputVariableDto;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
@@ -11,28 +12,41 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Mapper centralizado para DTOs de API.
- * Agora inclui suporte para respostas paginadas, evitando que o modelo do Spring Data vaze para o contrato.
+ * Interface de mapeamento centralizada utilizando MapStruct.
+ * Realiza a tradução entre agregados de domínio e DTOs de exposição.
+ * A configuração unmappedTargetPolicy garante que campos não mapeados não causem
+ * falhas silenciosas, enquanto as expressões customizadas tratam conversões de Enums.
  */
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface TemplateMapper {
 
     @Mapping(target = "id", source = "id")
+    @Mapping(target = "status", expression = "java(template.getStatus().name())")
+    @Mapping(target = "channel", expression = "java(template.getChannel().name())")
     TemplateResponse toResponse(NotificationTemplate template);
 
     StatsResponse toStatsResponse(TemplateStatsView stats);
 
+    /**
+     * Converte o Value Object SemanticVersion para sua representação textual.
+     */
     default String map(SemanticVersion value) {
         return value != null ? value.toString() : null;
     }
 
-    /**
-     * Converte uma página de agregados em uma lista de DTOs de resposta simplificados.
-     */
     List<TemplateResponse> toResponseList(List<NotificationTemplate> templates);
 
     /**
-     * Wrapper para respostas paginadas.
+     * Mapeamentos explícitos para blindagem do domínio.
+     */
+    InputVariableDto toInputVariableDto(InputVariable domain);
+    InputVariable toInputVariableDomain(InputVariableDto dto);
+    List<InputVariableDto> toInputVariableDtoList(List<InputVariable> domainList);
+    List<InputVariable> toInputVariableDomainList(List<InputVariableDto> dtoList);
+
+    /**
+     * Estrutura de transporte para respostas paginadas.
+     * Mantém a consistência do contrato REST independentemente da tecnologia de persistência.
      */
     record PagedResponse<T>(
             List<T> content,
@@ -53,9 +67,28 @@ public interface TemplateMapper {
     }
 
     record CreateTemplateRequest(String name, String description, Channel channel, String orgId, String workspaceId) {}
-    record TemplateResponse(String id, String name, String description, Channel channel, String status, OffsetDateTime createdAt, List<VersionResponse> versions) {}
-    record VersionResponse(String id, String version, String estado, String body, List<InputVariable> inputSchema) {}
+
+    record TemplateResponse(
+            String id,
+            String name,
+            String description,
+            String channel,
+            String status,
+            OffsetDateTime createdAt,
+            List<VersionResponse> versions
+    ) {}
+
+    record VersionResponse(
+            String id,
+            String version,
+            String estado,
+            String body,
+            List<InputVariableDto> inputSchema
+    ) {}
+
     record ExecutionRequest(String templateVersionId, List<String> recipients, Map<String, Object> variables) {}
+
     record ExecutionResponse(String executionId, String renderedContent, String status, OffsetDateTime executedOn) {}
+
     record StatsResponse(String templateId, String templateName, long totalSent, long successCount, long errorCount, OffsetDateTime lastExecutedAt) {}
 }

@@ -27,8 +27,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 /**
- * Testes de contrato da API REST para o TemplateController.
- * Utiliza MockitoBean (substituto do MockBean no Spring Boot 3.5+) para isolar a camada web.
+ * Testes de contrato da API REST.
+ * Valida a integridade dos endpoints, códigos de status HTTP e o formato das
+ * respostas JSON em conformidade com a especificação OpenAPI.
  */
 @WebMvcTest(TemplateController.class)
 @DisplayName("API: Template Controller")
@@ -58,7 +59,6 @@ class TemplateControllerTest {
     @Test
     @DisplayName("Deve criar um template e retornar 201 Created")
     void shouldCreateTemplate() throws Exception {
-        // Cenário
         TemplateMapper.CreateTemplateRequest request = new TemplateMapper.CreateTemplateRequest(
                 "Welcome", "Desc", Channel.EMAIL, "org-1", "wp-1"
         );
@@ -70,15 +70,19 @@ class TemplateControllerTest {
                 .build();
 
         TemplateMapper.TemplateResponse response = new TemplateMapper.TemplateResponse(
-                "uuid-123", "Welcome", "Desc", Channel.EMAIL, "ACTIVE", OffsetDateTime.now(), null
+                "uuid-123",
+                "Welcome",
+                "Desc",
+                Channel.EMAIL.name(),
+                "ACTIVE",
+                OffsetDateTime.now(),
+                null
         );
 
-        // Mocking
         when(templateService.createTemplate(anyString(), anyString(), any(), anyString(), anyString()))
                 .thenReturn(template);
         when(mapper.toResponse(any())).thenReturn(response);
 
-        // Execução e Validação
         mockMvc.perform(post("/v1/templates")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
