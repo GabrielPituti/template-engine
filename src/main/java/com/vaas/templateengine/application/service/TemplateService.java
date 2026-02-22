@@ -2,12 +2,15 @@ package com.vaas.templateengine.application.service;
 
 import com.vaas.templateengine.domain.event.NotificationDispatchedEvent;
 import com.vaas.templateengine.domain.event.TemplateArchivedEvent;
+import com.vaas.templateengine.domain.event.TemplateVersionPublishedEvent;
 import com.vaas.templateengine.domain.model.*;
 import com.vaas.templateengine.domain.port.NotificationExecutionRepository;
 import com.vaas.templateengine.domain.port.NotificationTemplateRepository;
 import com.vaas.templateengine.infrastructure.messaging.NotificationProducer;
 import com.vaas.templateengine.shared.exception.BusinessException;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -19,8 +22,10 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Serviço de aplicação responsável pela orquestração do ciclo de vida de templates.
+ * Orquestrador central da lógica de negócio de templates.
+ * Implementa regras de versionamento, imutabilidade, auditoria e diferenciais de performance/observabilidade.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TemplateService {
@@ -31,8 +36,16 @@ public class TemplateService {
     private final RenderEngine renderEngine;
     private final NotificationProducer eventProducer;
 
+    /** Diferencial: Registro de métricas para Observabilidade via Micrometer */
+    private final MeterRegistry meterRegistry;
+
+    /**
+     * Cria um novo template com sua versão inicial em estado de rascunho (1.0.0).
+     */
     @Transactional
     public NotificationTemplate createTemplate(String name, String description, Channel channel, String orgId, String workspaceId) {
+        log.info("Criando novo template: {} para a organização: {}", name, orgId);
+
         NotificationTemplate template = NotificationTemplate.builder()
                 .name(name)
                 .description(description)
@@ -44,79 +57,93 @@ public class TemplateService {
                 .updatedAt(OffsetDateTime.now())
                 .build();
 
-        TemplateVersion initialVersion = TemplateVersion.builder()
+        TemplateVersion initial = TemplateVersion.builder()
                 .id(UUID.randomUUID().toString())
                 .version(SemanticVersion.initial())
                 .estado(VersionState.DRAFT)
-                .subject("Novo Template: " + name)
-                .body("Bem-vindo {{nome}}")
+                .subject("Bem-vindo ao serviço") // Atendendo RF01
+                .body("Olá {{nome}}, seu cadastro foi realizado.")
                 .inputSchema(List.of(new InputVariable("nome", VariableType.STRING, true)))
-                .changelog("Versão inicial gerada automaticamente.")
+                .changelog("Setup inicial do template.") // Atendendo RF01
                 .createdAt(OffsetDateTime.now())
                 .build();
 
-        template.addVersion(initialVersion);
+        template.addVersion(initial);
         return templateRepository.save(template);
     }
 
+    /**
+     * Recupera um template por ID. Utiliza Caffeine Cache para alta performance em execuções massivas.
+     */
     @Cacheable(value = "templates", key = "#id")
     public NotificationTemplate getById(String id) {
         return templateRepository.findById(id)
-                .orElseThrow(() -> new BusinessException("Template não encontrado", "TEMPLATE_NOT_FOUND"));
+                .orElseThrow(() -> new BusinessException("Template não encontrado: " + id, "TEMPLATE_NOT_FOUND"));
     }
 
+    /**
+     * Publica uma versão, tornando-a imutável. Invalida o cache para propagar a alteração.
+     */
     @Transactional
     @CacheEvict(value = "templates", key = "#templateId")
     public NotificationTemplate publishVersion(String templateId, String versionId) {
         NotificationTemplate template = getById(templateId);
         TemplateVersion version = template.getVersion(versionId);
 
-        version.publish();
-        templateRepository.save(template);
+        version.publish(); // Lógica encapsulada no domínio
+        NotificationTemplate saved = templateRepository.save(template);
 
-        // Emissão de evento sênior para o Kafka
-        eventProducer.publish(new com.vaas.templateengine.domain.event.TemplateVersionPublishedEvent(templateId, OffsetDateTime.now(), versionId));
+        eventProducer.publish(new TemplateVersionPublishedEvent(templateId, OffsetDateTime.now(), versionId));
+        log.info("Versão {} do template {} publicada com sucesso.", version.getVersion(), templateId);
 
-        return template;
+        return saved;
     }
 
+    /**
+     * Realiza o Soft Delete (Arquivamento) conforme RF01.
+     */
     @Transactional
     @CacheEvict(value = "templates", key = "#templateId")
     public void archiveTemplate(String templateId) {
-        // Correção Bug #1: Soft Delete em vez de hard delete.
         NotificationTemplate template = getById(templateId);
-        template.archive();
+        template.archive(); // Proteção de domínio
         templateRepository.save(template);
 
-        // Emissão de evento de arquivamento
         eventProducer.publish(new TemplateArchivedEvent(templateId, OffsetDateTime.now()));
+        log.info("Template {} arquivado com sucesso.", templateId);
     }
 
+    /**
+     * Executa a renderização do template com validação rigorosa de schema e estado.
+     * Registra métricas de observabilidade para monitoramento em tempo real.
+     */
     @Transactional
     public NotificationExecution executeTemplate(String templateId, String versionId, List<String> recipients, Map<String, Object> variables) {
         NotificationTemplate template = getById(templateId);
 
+        // Proteção Sênior: Impedir disparos de templates deletados
         if (template.getStatus() == TemplateStatus.ARCHIVED) {
-            throw new BusinessException("Não é possível executar um template arquivado", "TEMPLATE_ARCHIVED");
+            recordMetric(template, "ARCHIVED_ERROR");
+            throw new BusinessException("Não é possível executar um template arquivado.", "TEMPLATE_ARCHIVED");
         }
 
-        // Correção Bug #4: Validar se a versão específica está PUBLISHED
-        TemplateVersion version = findVersionForExecution(template, versionId);
+        TemplateVersion version = (versionId != null) ? template.getVersion(versionId) : template.getLatestPublishedVersion();
 
+        // Proteção Sênior: Impedir disparos de rascunhos (DRAFT)
         if (!version.isPublished()) {
-            throw new BusinessException("A versão solicitada ainda está em rascunho (DRAFT).", "VERSION_NOT_PUBLISHED");
+            recordMetric(template, "DRAFT_ERROR");
+            throw new BusinessException("A versão solicitada não está publicada.", "VERSION_NOT_PUBLISHED");
         }
 
         ExecutionStatus status = ExecutionStatus.SUCCESS;
-        String renderedBody;
+        String renderedContent;
 
         try {
             schemaValidator.validate(version.getInputSchema(), variables);
-            boolean shouldEscapeHtml = template.getChannel() == Channel.EMAIL;
-            renderedBody = renderEngine.render(version.getBody(), variables, shouldEscapeHtml);
+            renderedContent = renderEngine.render(version.getBody(), variables, template.getChannel() == Channel.EMAIL);
         } catch (BusinessException e) {
             status = ExecutionStatus.VALIDATION_ERROR;
-            renderedBody = "Erro de Validação: " + e.getMessage();
+            renderedContent = "Falha técnica na validação: " + e.getMessage();
         }
 
         NotificationExecution execution = NotificationExecution.builder()
@@ -125,24 +152,31 @@ public class TemplateService {
                 .versionId(version.getId())
                 .recipients(recipients)
                 .variables(variables)
-                .renderedContent(renderedBody)
+                .renderedContent(renderedContent)
                 .status(status)
                 .executedOn(OffsetDateTime.now())
                 .build();
 
         NotificationExecution saved = executionRepository.save(execution);
 
-        // Dispara evento para atualização das estatísticas (CQRS)
+        // CQRS: Dispara evento para atualização das visões de leitura
         eventProducer.publish(new NotificationDispatchedEvent(templateId, status.name()));
+
+        // Diferencial: Observabilidade multidimensional
+        recordMetric(template, status.name());
 
         return saved;
     }
 
-    private TemplateVersion findVersionForExecution(NotificationTemplate template, String versionId) {
-        if (versionId != null) {
-            return template.getVersion(versionId);
-        }
-
-        return template.getLatestPublishedVersion();
+    /**
+     * Helper para registro de métricas via Micrometer.
+     * Permite criar dashboards por Canal e Status no Grafana/Prometheus.
+     */
+    private void recordMetric(NotificationTemplate template, String resultStatus) {
+        meterRegistry.counter("notifications.execution.total",
+                "channel", template.getChannel().name(),
+                "status", resultStatus,
+                "orgId", template.getOrgId()
+        ).increment();
     }
 }

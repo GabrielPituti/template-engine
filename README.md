@@ -1,54 +1,32 @@
-Notification Template Engine - Fase 5: API, Mensageria e Diferenciais Sênior
+Notification Template Engine - Fase 6: Observabilidade e Auditoria Final
 
-Esta branch consolida a transformação do motor de templates em um serviço distribuído, resiliente e de alta performance, integrando a camada de exposição REST com eventos assíncronos e a separação de responsabilidades via CQRS.
+Esta etapa consolida os diferenciais técnicos do projeto, transformando a engine funcional em um serviço pronto para produção, com foco em monitoramento, integridade de dados e princípios de design sênior.
 
-🛠️ Implementações Consolidadas (Fevereiro 2026)
+Implementações Técnicas (Diferenciais)
 
-API Contract-First com OpenAPI 3.1: Documentação técnica rigorosa disponível via Swagger UI, permitindo testes funcionais imediatos dos contratos.
+Observabilidade com Micrometer: Integração de métricas customizadas. O sistema agora expõe indicadores de execução segmentados por canal, status da operação e organização. Isso permite a criação de dashboards granulares para monitorar a saúde do serviço em ambientes multi-tenant.
 
-Busca Paginada com Filtros Dinâmicos: Implementação do GET /v1/templates com suporte a paginação e filtros opcionais por channel e status, utilizando queries otimizadas no MongoDB.
+Refatoração de Domínio (DDD): Reestruturação do agregado NotificationTemplate para garantir o encapsulamento. Removi setters públicos desnecessários, forçando que qualquer mudança de estado (como publicação ou arquivamento) ocorra através de métodos de domínio que validam as regras de negócio.
 
-Padrão CQRS (Read Model Projections): Separação entre o fluxo de escrita e leitura. Um Kafka Consumer processa eventos de despacho e atualiza uma View de Estatísticas (TemplateStatsView) de forma assíncrona.
+Garantia de Imutabilidade: Implementação de travas lógicas que impedem a alteração de conteúdos em versões já publicadas e bloqueiam a execução de versões em rascunho (DRAFT).
 
-Performance com Caffeine Cache: Camada de cache local para templates publicados, garantindo latência mínima no motor de renderização.
+Resiliência em Sistemas Distribuídos: Adição de tratamento de exceções estruturado no consumidor Kafka, mitigando riscos de loops de reprocessamento em caso de falhas na persistência das projeções de leitura (CQRS).
 
-Segurança Avançada: Blindagem do RenderEngine contra ataques de ReDoS e sanitização automática de HTML (XSS Protection) para o canal de e-mail.
+Exclusão Lógica (Soft Delete): Transição completa para arquivamento lógico. O sistema preserva a integridade histórica e a rastreabilidade, cumprindo os requisitos de auditoria do desafio.
 
-Mapeamento com MapStruct: Desacoplamento total entre as entidades de domínio e os DTOs de API, suportando inclusive Value Objects complexos (SemanticVersion).
+Defesa de Arquitetura para Entrevista
 
-🧱 Decisões Técnicas e Defesa
+1. Estratégia de Métricas Customizadas
 
-Por que CQRS para Estatísticas?
+Em sistemas de alta volumetria e múltiplos inquilinos, métricas genéricas de infraestrutura (CPU/Memória) são insuficientes. Implementei métricas com tags para que o time de operações consiga identificar se um aumento na taxa de erro é global ou isolado a um canal específico (ex: falhas em Webhooks) ou a um cliente específico.
 
-Argumento: Em sistemas de alta volumetria, contar registros em uma tabela de logs de milhões de linhas é proibitivo. A projeção de leitura permite que o endpoint de /stats responda em tempo constante ($O(1)$).
+2. Encapsulamento vs. Modelo Anêmico
 
-Por que Swagger com Static OpenAPI?
+Optei por fechar os setters do Aggregate Root para evitar que a lógica de negócio vaze para a camada de aplicação. Ao centralizar as mudanças de estado no próprio agregado, garantimos que eventos colaterais (como o disparo de mensagens para o Kafka) sempre acompanhem a mudança de estado, reduzindo o risco de inconsistência entre o banco de dados e o broker de mensagens.
 
-Argumento: Garante que o código siga fielmente o contrato desenhado (Contract-First), facilitando a integração com times de Frontend e outros microsserviços.
+Validação de Métricas
 
-🚀 Como Validar
+Os indicadores podem ser consultados via Spring Actuator no endpoint:
+http://localhost:8080/actuator/metrics/notifications.execution.total
 
-1. Subir a Infraestrutura
-
-docker-compose up -d
-
-
-2. Executar a Aplicação
-
-./gradlew bootRun
-
-
-3. Acessar Documentação e Monitoramento
-
-Swagger UI: http://localhost:8080/swagger-ui.html
-
-Kafdrop: http://localhost:9000 (Verifique os tópicos de eventos).
-
-Actuator Health: http://localhost:8080/actuator/health
-
-4. Testes de Integração
-
-./gradlew test
-
-
-Status Final da Fase 5: 100% Concluído 🟢 | Build Successful ✅
+Status do Projeto: Finalizado com todos os diferenciais obrigatórios e valorizados implementados.
