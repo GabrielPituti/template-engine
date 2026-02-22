@@ -22,15 +22,14 @@ import java.time.OffsetDateTime;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 /**
- * Testes de contrato da API REST para validação da camada de exposição.
- * Utiliza MockitoBean para isolar as dependências da aplicação e focar na
- * validação dos status codes, payloads de resposta e conformidade com o
- * contrato OpenAPI definido.
+ * Testes de contrato da API REST.
+ * Valida a integridade da camada de exposição (Adapters Inbound), garantindo
+ * conformidade com a especificação OpenAPI e o correto roteamento de status codes.
  */
 @WebMvcTest(TemplateController.class)
 @DisplayName("API: Template Controller")
@@ -58,30 +57,20 @@ class TemplateControllerTest {
     private NotificationTemplateRepository templateRepository;
 
     @Test
-    @DisplayName("Deve criar um template e retornar 201 Created")
+    @DisplayName("Deve retornar 201 Created ao provisionar um novo recurso de template")
     void shouldCreateTemplate() throws Exception {
         TemplateMapper.CreateTemplateRequest request = new TemplateMapper.CreateTemplateRequest(
                 "Welcome", "Desc", Channel.EMAIL, "org-1", "wp-1"
         );
 
         NotificationTemplate template = NotificationTemplate.builder()
-                .id("uuid-123")
-                .name("Welcome")
-                .status(TemplateStatus.ACTIVE)
-                .build();
+                .id("uuid-123").name("Welcome").status(TemplateStatus.ACTIVE).build();
 
         TemplateMapper.TemplateResponse response = new TemplateMapper.TemplateResponse(
-                "uuid-123",
-                "Welcome",
-                "Desc",
-                Channel.EMAIL.name(),
-                "ACTIVE",
-                OffsetDateTime.now(),
-                null
+                "uuid-123", "Welcome", "Desc", Channel.EMAIL.name(), "ACTIVE", OffsetDateTime.now(), null
         );
 
-        when(templateService.createTemplate(anyString(), anyString(), any(), anyString(), anyString()))
-                .thenReturn(template);
+        when(templateService.createTemplate(anyString(), anyString(), any(), anyString(), anyString())).thenReturn(template);
         when(mapper.toResponse(any())).thenReturn(response);
 
         mockMvc.perform(post("/v1/templates")
@@ -90,5 +79,27 @@ class TemplateControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value("uuid-123"))
                 .andExpect(jsonPath("$.name").value("Welcome"));
+    }
+
+    @Test
+    @DisplayName("Deve retornar 204 No Content ao arquivar um template existente")
+    void shouldReturn204WhenArchivingSuccessfully() throws Exception {
+        mockMvc.perform(delete("/v1/templates/uuid-123"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("Deve retornar 200 OK ao localizar um template por identificador único")
+    void shouldReturn200WhenTemplateExists() throws Exception {
+        TemplateMapper.TemplateResponse response = new TemplateMapper.TemplateResponse(
+                "uuid-123", "Welcome", "Desc", "EMAIL", "ACTIVE", OffsetDateTime.now(), null
+        );
+
+        when(templateService.getById("uuid-123")).thenReturn(NotificationTemplate.builder().build());
+        when(mapper.toResponse(any())).thenReturn(response);
+
+        mockMvc.perform(get("/v1/templates/uuid-123"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("uuid-123"));
     }
 }

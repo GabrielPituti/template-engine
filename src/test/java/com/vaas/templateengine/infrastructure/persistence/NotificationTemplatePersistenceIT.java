@@ -63,10 +63,10 @@ class NotificationTemplatePersistenceIT {
         NotificationTemplate inst1 = repository.findById(original.getId()).orElseThrow();
         NotificationTemplate inst2 = repository.findById(original.getId()).orElseThrow();
 
-        inst1.setName("Update 1");
+        inst1.updateInformation("Update 1", original.getDescription());
         repository.save(inst1);
 
-        inst2.setName("Update 2");
+        inst2.updateInformation("Update 2", original.getDescription());
 
         assertThrows(OptimisticLockingFailureException.class, () -> repository.save(inst2));
     }

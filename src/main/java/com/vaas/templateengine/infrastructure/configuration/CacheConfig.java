@@ -10,17 +10,17 @@ import org.springframework.context.annotation.Configuration;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Configuração de Cache utilizando Caffeine.
- * Otimiza a performance do sistema evitando consultas repetitivas ao banco de dados
- * para templates que raramente mudam após publicados.
+ * Configuração de cache local distribuída através da biblioteca Caffeine.
+ * Otimiza a performance de leitura para templates estáveis (PUBLISHED), reduzindo a latência
+ * e a carga sobre o MongoDB em cenários de disparos massivos de notificações.
  */
 @Configuration
 @EnableCaching
 public class CacheConfig {
 
     /**
-     * Define o gerenciador de cache com políticas de expiração e tamanho máximo.
-     * @return CacheManager configurado.
+     * Instancia o gerenciador de cache com políticas de retenção baseadas em tempo e tamanho.
+     * A estratégia de 'expireAfterWrite' garante que atualizações sejam propagadas após o TTL definido.
      */
     @Bean
     public CacheManager cacheManager() {
@@ -28,8 +28,8 @@ public class CacheConfig {
         cacheManager.setCaffeine(Caffeine.newBuilder()
                 .initialCapacity(100)
                 .maximumSize(500)
-                .expireAfterWrite(10, TimeUnit.MINUTES) // Expira após 10 minutos de escrita
-                .recordStats()); // Habilita métricas para observabilidade
+                .expireAfterWrite(10, TimeUnit.MINUTES)
+                .recordStats());
         return cacheManager;
     }
 }

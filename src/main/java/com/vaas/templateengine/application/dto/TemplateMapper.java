@@ -2,6 +2,8 @@ package com.vaas.templateengine.application.dto;
 
 import com.vaas.templateengine.domain.model.*;
 import com.vaas.templateengine.infrastructure.web.dto.InputVariableDto;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
@@ -13,9 +15,8 @@ import java.util.Map;
 
 /**
  * Interface de mapeamento centralizada utilizando MapStruct.
- * Realiza a tradução entre agregados de domínio e DTOs de exposição.
- * A configuração unmappedTargetPolicy garante que campos não mapeados não causem
- * falhas silenciosas, enquanto as expressões customizadas tratam conversões de Enums.
+ * Implementa o isolamento entre camadas, garantindo que o contrato da API (DTOs)
+ * permaneça estável mesmo diante de evoluções no modelo de domínio.
  */
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface TemplateMapper {
@@ -27,27 +28,19 @@ public interface TemplateMapper {
 
     StatsResponse toStatsResponse(TemplateStatsView stats);
 
-    /**
-     * Converte o Value Object SemanticVersion para sua representação textual.
-     */
     default String map(SemanticVersion value) {
         return value != null ? value.toString() : null;
     }
 
     List<TemplateResponse> toResponseList(List<NotificationTemplate> templates);
 
-    /**
-     * Mapeamentos explícitos para blindagem do domínio.
-     */
+    List<VersionResponse> toVersionResponseList(List<TemplateVersion> versions);
+
     InputVariableDto toInputVariableDto(InputVariable domain);
     InputVariable toInputVariableDomain(InputVariableDto dto);
     List<InputVariableDto> toInputVariableDtoList(List<InputVariable> domainList);
     List<InputVariable> toInputVariableDomainList(List<InputVariableDto> dtoList);
 
-    /**
-     * Estrutura de transporte para respostas paginadas.
-     * Mantém a consistência do contrato REST independentemente da tecnologia de persistência.
-     */
     record PagedResponse<T>(
             List<T> content,
             long totalElements,
@@ -66,29 +59,32 @@ public interface TemplateMapper {
         );
     }
 
-    record CreateTemplateRequest(String name, String description, Channel channel, String orgId, String workspaceId) {}
-
-    record TemplateResponse(
-            String id,
-            String name,
+    record CreateTemplateRequest(
+            @NotBlank(message = "O nome é obrigatório") String name,
             String description,
-            String channel,
-            String status,
-            OffsetDateTime createdAt,
-            List<VersionResponse> versions
+            @NotNull(message = "O canal é obrigatório") Channel channel,
+            @NotBlank(message = "O orgId é obrigatório") String orgId,
+            @NotBlank(message = "O workspaceId é obrigatório") String workspaceId
     ) {}
 
-    record VersionResponse(
-            String id,
-            String version,
-            String estado,
+    record CreateVersionRequest(
+            String subject,
+            @NotBlank(message = "O corpo do template é obrigatório") String body,
+            String changelog,
+            List<InputVariableDto> inputSchema,
+            boolean isMinor
+    ) {}
+
+    record UpdateVersionRequest(
+            String subject,
             String body,
+            String changelog,
             List<InputVariableDto> inputSchema
     ) {}
 
+    record TemplateResponse(String id, String name, String description, String channel, String status, OffsetDateTime createdAt, List<VersionResponse> versions) {}
+    record VersionResponse(String id, String version, String estado, String body, List<InputVariableDto> inputSchema) {}
     record ExecutionRequest(String templateVersionId, List<String> recipients, Map<String, Object> variables) {}
-
     record ExecutionResponse(String executionId, String renderedContent, String status, OffsetDateTime executedOn) {}
-
     record StatsResponse(String templateId, String templateName, long totalSent, long successCount, long errorCount, OffsetDateTime lastExecutedAt) {}
 }

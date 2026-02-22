@@ -72,7 +72,7 @@ public class TemplateRepositoryAdapter implements NotificationTemplateRepository
     @Override
     public void deleteById(String id) {
         repository.findById(id).ifPresent(template -> {
-            template.archive(); // Delega a alteração de estado para o domínio (DDD)
+            template.archive();
             repository.save(template);
         });
     }
