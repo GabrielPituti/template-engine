@@ -9,8 +9,9 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Consumer responsável por processar eventos de despacho e atualizar as projeções de leitura.
- * Correção Bug #5: Adicionado tratamento de erro para evitar loops de reprocessamento.
+ * Consumidor de eventos de domínio para manutenção de projeções analíticas.
+ * Implementa o padrão CQRS (Command Query Responsibility Segregation),
+ * desacoplando a atualização de estatísticas do fluxo principal de execução.
  */
 @Slf4j
 @Component
@@ -19,11 +20,14 @@ public class NotificationConsumer {
 
     private final TemplateStatsRepository statsRepository;
 
+    /**
+     * Processa notificações disparadas para atualizar a visão consolidada de métricas.
+     * Inclui mecanismos de tolerância a falhas para evitar que inconsistências na
+     * projeção interrompam o consumo de mensagens do broker.
+     */
     @KafkaListener(topics = "notification-dispatched", groupId = "template-engine-stats")
     public void consumeNotificationDispatched(NotificationDispatchedEvent event) {
         try {
-            log.info("Processando estatísticas para o template: {}", event.aggregateId());
-
             TemplateStatsView stats = statsRepository.findById(event.aggregateId())
                     .orElse(TemplateStatsView.builder()
                             .templateId(event.aggregateId())
@@ -32,13 +36,12 @@ public class NotificationConsumer {
                             .errorCount(0)
                             .build());
 
-            boolean isSuccess = "SUCCESS".equalsIgnoreCase(event.status());
-            stats.increment(isSuccess);
-
+            stats.increment("SUCCESS".equalsIgnoreCase(event.status()));
             statsRepository.save(stats);
+
+            log.debug("Estatísticas atualizadas para o template: {}", event.aggregateId());
         } catch (Exception e) {
-            // Log do erro para monitoramento (DLQ seria o ideal em produção)
-            log.error("Erro ao processar evento do Kafka para o template {}: {}",
+            log.error("Falha na atualização da projeção de leitura para o template {}: {}",
                     event.aggregateId(), e.getMessage());
         }
     }

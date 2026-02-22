@@ -9,39 +9,35 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Entidade de Auditoria: Log de cada execução de renderização.
- * Registra o estado exato da notificação no momento do disparo para fins de conformidade.
+ * Registro de Auditoria e Conformidade (Audit Log).
+ * Esta entidade representa um snapshot imutável de uma execução de renderização.
+ * Uma vez criada, ela serve como evidência histórica do conteúdo disparado,
+ * destinatários e estado resultante, sendo fundamental para processos de compliance.
  */
 @Getter
-@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "notification_executions")
 public class NotificationExecution {
 
-    /** Identificador único da execução (UUID) */
     @Id
     private String id;
 
-    /** Referência ao template utilizado */
     private String templateId;
 
-    /** Referência à versão específica do template no momento da execução */
     private String versionId;
 
-    /** Lista de destinatários (e-mails, números de telefone ou URLs de webhook) */
     private List<String> recipients;
 
-    /** Snapshot das variáveis fornecidas pelo cliente no momento da requisição */
+    /** * Snapshot das variáveis fornecidas pelo cliente no momento exato da requisição.
+     * Este estado é preservado para garantir a rastreabilidade em auditorias futuras.
+     */
     private Map<String, Object> variables;
 
-    /** Conteúdo final renderizado após o processamento das variáveis */
     private String renderedContent;
 
-    /** Resultado final da operação (Sucesso ou erro de validação) */
     private ExecutionStatus status;
 
-    /** Timestamp absoluto da execução com informação de fuso horário */
     private OffsetDateTime executedOn;
 }

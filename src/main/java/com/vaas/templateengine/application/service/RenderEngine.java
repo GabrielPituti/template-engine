@@ -9,29 +9,24 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Motor de renderização otimizado para alta performance e baixa alocação de memória.
- * Implementa salvaguardas contra ataques de ReDoS e negação de serviço por estouro de conteúdo.
+ * Motor de interpolação de strings responsável pela resolução de placeholders.
+ * A implementação prioriza a segurança contra ataques de negação de serviço (ReDoS)
+ * através de expressões regulares não-gananciosas e limites rígidos de carga útil.
  */
 @Component
 public class RenderEngine {
 
-    /** * Expressão regular não-gananciosa para identificação de placeholders.
-     * O uso de '.+?' aliado à validação de tamanho previne o backtracking catastrófico (ReDoS).
-     */
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{(.+?)\\}\\}");
-
-    /** * Limite de segurança para o tamanho do conteúdo (50KB).
-     * Impede o processamento de strings excessivamente longas que poderiam causar exaustão de CPU ou Memória.
-     */
     private static final int MAX_CONTENT_LENGTH = 50_000;
 
     /**
-     * Processa a substituição de placeholders por valores reais do contexto de execução.
-     * * @param content Texto bruto do template contendo os placeholders.
-     * @param variables Mapa contendo as chaves e valores para preenchimento.
-     * @param shouldEscapeHtml Define se deve aplicar sanitização contra injeção de script (XSS).
-     * @return Conteúdo processado, com as variáveis interpoladas e seguro para o canal de saída.
-     * @throws BusinessException Caso o conteúdo exceda limites de segurança ou faltem variáveis obrigatórias.
+     * Realiza a substituição dinâmica de placeholders por valores do contexto.
+     * Utiliza StringBuilder para otimização de memória e Matcher.quoteReplacement
+     * para garantir a integridade de caracteres especiais durante a substituição.
+     * * @param content Template bruto com sintaxe {{variavel}}.
+     * @param variables Mapa de contexto fornecido para a execução.
+     * @param shouldEscapeHtml Ativa a sanitização para proteção contra Cross-Site Scripting (XSS).
+     * @return Conteúdo final processado e seguro.
      */
     public String render(String content, Map<String, Object> variables, boolean shouldEscapeHtml) {
         if (content == null || content.isEmpty()) {
@@ -40,7 +35,7 @@ public class RenderEngine {
 
         if (content.length() > MAX_CONTENT_LENGTH) {
             throw new BusinessException(
-                    "O conteúdo do template excede o limite de segurança permitido.",
+                    "O conteúdo excede o limite de segurança operacional.",
                     "TEMPLATE_TOO_LARGE"
             );
         }
@@ -54,18 +49,15 @@ public class RenderEngine {
 
             if (value == null) {
                 throw new BusinessException(
-                        "Variável obrigatória ausente no contexto de renderização: " + key,
+                        "Variável obrigatória ausente no contexto: " + key,
                         "MISSING_REQUIRED_VARIABLE"
                 );
             }
 
             String stringValue = value.toString();
+            String processedValue = shouldEscapeHtml ? HtmlUtils.htmlEscape(stringValue) : stringValue;
 
-            if (shouldEscapeHtml) {
-                stringValue = HtmlUtils.htmlEscape(stringValue);
-            }
-
-            matcher.appendReplacement(sb, Matcher.quoteReplacement(stringValue));
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(processedValue));
         }
         matcher.appendTail(sb);
 

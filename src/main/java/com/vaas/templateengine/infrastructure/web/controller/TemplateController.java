@@ -3,12 +3,9 @@ package com.vaas.templateengine.infrastructure.web.controller;
 import com.vaas.templateengine.application.dto.TemplateMapper;
 import com.vaas.templateengine.application.dto.TemplateMapper.*;
 import com.vaas.templateengine.application.service.TemplateService;
-import com.vaas.templateengine.domain.event.NotificationDispatchedEvent;
-import com.vaas.templateengine.domain.event.TemplateCreatedEvent;
 import com.vaas.templateengine.domain.model.*;
-import com.vaas.templateengine.infrastructure.messaging.NotificationProducer;
-import com.vaas.templateengine.infrastructure.persistence.TemplateStatsRepository;
 import com.vaas.templateengine.domain.port.NotificationTemplateRepository;
+import com.vaas.templateengine.infrastructure.persistence.TemplateStatsRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -17,10 +14,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.OffsetDateTime;
-
 /**
- * Controller REST em conformidade com o RF01 e RF03 (CQRS).
+ * Ponto de entrada da API para gestão e execução de templates.
+ * Atua como o adaptador primário na Arquitetura Hexagonal, sendo responsável
+ * pela validação de contratos de entrada e pela orquestração de respostas
+ * em conformidade com a especificação OpenAPI.
  */
 @RestController
 @RequestMapping("/v1/templates")
@@ -29,23 +27,27 @@ public class TemplateController {
 
     private final TemplateService templateService;
     private final TemplateMapper mapper;
-    private final NotificationProducer eventProducer;
     private final TemplateStatsRepository statsRepository;
     private final NotificationTemplateRepository templateRepository;
 
+    /**
+     * Endpoint para criação de novos agregados de template.
+     * Delega a orquestração para o serviço de aplicação para garantir que o
+     * ciclo de vida inicial e a emissão de eventos ocorram de forma atômica.
+     */
     @PostMapping
     public ResponseEntity<TemplateResponse> create(@RequestBody @Valid CreateTemplateRequest request) {
         NotificationTemplate template = templateService.createTemplate(
                 request.name(), request.description(), request.channel(),
                 request.orgId(), request.workspaceId()
         );
-        eventProducer.publish(new TemplateCreatedEvent(template.getId(), OffsetDateTime.now(), template.getName()));
         return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(template));
     }
 
     /**
-     * Lista templates com paginação e filtros (RF01).
-     * Exemplo: GET /v1/templates?orgId=org-1&workspaceId=wp-1&channel=EMAIL&page=0&size=10
+     * Lista templates utilizando paginação e filtros dinâmicos.
+     * Esta implementação cumpre o requisito de busca multi-tenant, exigindo
+     * obrigatoriamente os identificadores de organização e workspace.
      */
     @GetMapping
     public ResponseEntity<PagedResponse<TemplateResponse>> list(
@@ -64,6 +66,11 @@ public class TemplateController {
         return ResponseEntity.ok(mapper.toResponse(templateService.getById(id)));
     }
 
+    /**
+     * Expõe a visão de leitura (Read Model) das estatísticas do template.
+     * Cumpre o papel de Query no padrão CQRS, acessando uma projeção otimizada
+     * e desacoplada da escrita principal.
+     */
     @GetMapping("/{id}/stats")
     public ResponseEntity<StatsResponse> getStats(@PathVariable String id) {
         TemplateStatsView stats = statsRepository.findById(id)
@@ -71,6 +78,11 @@ public class TemplateController {
         return ResponseEntity.ok(mapper.toStatsResponse(stats));
     }
 
+    /**
+     * Aciona o motor de renderização e registra o log de execução.
+     * A segurança da operação (como travas de arquivamento e publicação)
+     * é garantida pela camada de serviço de aplicação.
+     */
     @PostMapping("/{id}/execute")
     public ResponseEntity<ExecutionResponse> execute(
             @PathVariable String id,
@@ -78,10 +90,32 @@ public class TemplateController {
         NotificationExecution execution = templateService.executeTemplate(
                 id, request.templateVersionId(), request.recipients(), request.variables()
         );
-        eventProducer.publish(new NotificationDispatchedEvent(id, execution.getStatus().name()));
+
         return ResponseEntity.ok(new ExecutionResponse(
                 execution.getId(), execution.getRenderedContent(),
                 execution.getStatus().name(), execution.getExecutedOn()
         ));
+    }
+
+    /**
+     * Promove um rascunho para versão publicada.
+     * Essencial para o fluxo de imutabilidade, selando o conteúdo para execuções futuras.
+     */
+    @PostMapping("/{id}/versions/{versionId}/publish")
+    public ResponseEntity<TemplateResponse> publish(
+            @PathVariable String id,
+            @PathVariable String versionId) {
+        NotificationTemplate template = templateService.publishVersion(id, versionId);
+        return ResponseEntity.ok(mapper.toResponse(template));
+    }
+
+    /**
+     * Realiza o arquivamento do template.
+     * Implementado como Soft Delete para preservação da integridade histórica dos logs de envio.
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> archive(@PathVariable String id) {
+        templateService.archiveTemplate(id);
+        return ResponseEntity.noContent().build();
     }
 }

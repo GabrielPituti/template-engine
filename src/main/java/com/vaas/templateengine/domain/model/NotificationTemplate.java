@@ -11,8 +11,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Agregado Raiz (Aggregate Root) que representa um Template de Notificação.
- * Gerencia o ciclo de vida, versionamento e garante a integridade das regras de negócio.
+ * Agregado Raiz (Aggregate Root) que centraliza as regras de negócio de templates.
+ * Garante a integridade do ciclo de vida, versionamento e isolamento multi-tenant,
+ * protegendo o estado interno contra mutações inconsistentes.
  */
 @Getter
 @Builder(toBuilder = true)
@@ -24,21 +25,16 @@ public class NotificationTemplate {
     @Id
     private String id;
 
-    /** Nome do template - Mutação permitida via setter controlado */
     @Setter
     private String name;
 
-    /** Descrição do template - Mutação permitida via setter controlado */
     @Setter
     private String description;
 
     private Channel channel;
-
     private String orgId;
-
     private String workspaceId;
 
-    /** Status controlado: apenas métodos de domínio como archive() podem alterar */
     @Setter(AccessLevel.PRIVATE)
     private TemplateStatus status;
 
@@ -49,7 +45,9 @@ public class NotificationTemplate {
 
     private OffsetDateTime deletedAt;
 
-    /** Controle de concorrência otimista para evitar Race Conditions */
+    /** * Controle de concorrência otimista (Optimistic Locking).
+     * Previne perda de dados em atualizações simultâneas em ambientes distribuídos.
+     */
     @Version
     private Long internalVersion;
 
@@ -57,13 +55,12 @@ public class NotificationTemplate {
     private List<TemplateVersion> versions = new ArrayList<>();
 
     /**
-     * Adiciona uma nova versão ao agregado, validando o estado do template.
-     * @param version A versão a ser adicionada.
-     * @throws BusinessException se o template estiver arquivado.
+     * Registra uma nova iteração de conteúdo no histórico do template.
+     * Bloqueia a operação caso o template esteja em estado terminal (Archived).
      */
     public void addVersion(TemplateVersion version) {
         if (this.status == TemplateStatus.ARCHIVED) {
-            throw new BusinessException("Não é possível adicionar versões a um template arquivado.", "TEMPLATE_ARCHIVED");
+            throw new BusinessException("Templates arquivados não permitem novas versões.", "TEMPLATE_ARCHIVED");
         }
         if (this.versions == null) {
             this.versions = new ArrayList<>();
@@ -73,7 +70,7 @@ public class NotificationTemplate {
     }
 
     /**
-     * Realiza o arquivamento (Soft Delete) do template conforme RF01.
+     * Aplica o arquivamento lógico (Soft Delete), preservando a rastreabilidade histórica.
      */
     public void archive() {
         this.status = TemplateStatus.ARCHIVED;
@@ -81,23 +78,20 @@ public class NotificationTemplate {
         this.updatedAt = OffsetDateTime.now();
     }
 
-    /**
-     * Localiza uma versão por ID dentro da lista de versões do agregado.
-     */
     public TemplateVersion getVersion(String versionId) {
         return this.versions.stream()
                 .filter(v -> v.getId().equals(versionId))
                 .findFirst()
-                .orElseThrow(() -> new BusinessException("Versão não encontrada: " + versionId, "VERSION_NOT_FOUND"));
+                .orElseThrow(() -> new BusinessException("Versão inexistente: " + versionId, "VERSION_NOT_FOUND"));
     }
 
     /**
-     * Recupera a última versão que foi marcada como PUBLISHED.
+     * Seleciona a versão mais recente apta para produção.
      */
     public TemplateVersion getLatestPublishedVersion() {
         return this.versions.stream()
                 .filter(TemplateVersion::isPublished)
                 .max(TemplateVersion::compareTo)
-                .orElseThrow(() -> new BusinessException("Nenhuma versão publicada disponível.", "NO_PUBLISHED_VERSION"));
+                .orElseThrow(() -> new BusinessException("Nenhuma versão publicada encontrada.", "NO_PUBLISHED_VERSION"));
     }
 }

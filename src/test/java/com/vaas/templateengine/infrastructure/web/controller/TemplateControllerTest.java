@@ -27,9 +27,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 /**
- * Testes de contrato da API REST.
- * Valida a integridade dos endpoints, códigos de status HTTP e o formato das
- * respostas JSON em conformidade com a especificação OpenAPI.
+ * Testes de contrato da API REST para validação da camada de exposição.
+ * Utiliza MockitoBean para isolar as dependências da aplicação e focar na
+ * validação dos status codes, payloads de resposta e conformidade com o
+ * contrato OpenAPI definido.
  */
 @WebMvcTest(TemplateController.class)
 @DisplayName("API: Template Controller")

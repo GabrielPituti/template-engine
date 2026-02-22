@@ -6,8 +6,9 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * Entidade que representa uma iteração do template.
- * Implementa regras rigorosas de imutabilidade para garantir a integridade histórica.
+ * Representa uma iteração específica do conteúdo e contrato de dados de um template.
+ * Implementa garantias de imutabilidade para assegurar que versões já utilizadas
+ * em produção permaneçam como registros históricos fidedignos.
  */
 @Getter
 @Builder
@@ -28,15 +29,12 @@ public class TemplateVersion implements Comparable<TemplateVersion> {
     private OffsetDateTime createdAt;
 
     /**
-     * Atualiza o conteúdo da versão apenas se ela ainda for um rascunho (Bug Claude #1).
-     * @param body Novo corpo do template.
-     * @param subject Novo assunto.
-     * @param inputSchema Novo schema de variáveis.
-     * @param changelog Descrição da alteração.
+     * Realiza a atualização controlada do conteúdo da versão.
+     * Esta mutação é permitida apenas enquanto a versão reside em estado de rascunho (DRAFT).
      */
     public void updateContent(String body, String subject, List<InputVariable> inputSchema, String changelog) {
         if (isPublished()) {
-            throw new BusinessException("Versão publicada é imutável e não pode ser editada.", "VERSION_IMMUTABLE");
+            throw new BusinessException("Versões publicadas são imutáveis.", "VERSION_IMMUTABLE");
         }
         this.body = body;
         this.subject = subject;
@@ -44,9 +42,12 @@ public class TemplateVersion implements Comparable<TemplateVersion> {
         this.changelog = changelog;
     }
 
+    /**
+     * Transforma a versão em um artefato imutável pronto para execução.
+     */
     public void publish() {
         if (isPublished()) {
-            throw new BusinessException("Esta versão já está publicada.", "VERSION_ALREADY_PUBLISHED");
+            throw new BusinessException("A versão já se encontra publicada.", "VERSION_ALREADY_PUBLISHED");
         }
         this.estado = VersionState.PUBLISHED;
     }

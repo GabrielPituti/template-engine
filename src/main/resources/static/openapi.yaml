@@ -3,17 +3,17 @@ info:
   title: Notification Template Engine API
   version: 1.0.0
   description: |
-    API Multi-tenant para gestão e execução de templates de notificação.
-    Suporta versionamento semântico, renderização segura (ReDoS/XSS) e métricas via CQRS.
+    API Multi-tenant para gestão, versionamento e execução de templates de notificação.
+    Esta especificação segue o princípio Contract-First, servindo como documentação técnica e contrato de integração.
 
 servers:
   - url: http://localhost:8080
-    description: Servidor Local de Desenvolvimento
+    description: Servidor Local
 
 paths:
   /v1/templates:
     post:
-      summary: Cria um novo template
+      summary: Cria um novo template (Aggregate Root)
       tags: [Templates]
       requestBody:
         required: true
@@ -53,11 +53,11 @@ paths:
             enum: [ACTIVE, ARCHIVED]
       responses:
         '200':
-          description: Lista paginada de templates
+          description: Lista paginada de templates retornada com sucesso
 
   /v1/templates/{id}:
     get:
-      summary: Busca detalhes de um template por ID
+      summary: Busca detalhes completos de um template
       tags: [Templates]
       parameters:
         - name: id
@@ -69,9 +69,41 @@ paths:
         '200':
           description: Detalhes do template encontrados
 
+    delete:
+      summary: Arquiva um template (Soft Delete)
+      tags: [Templates]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Template arquivado com sucesso
+
+  /v1/templates/{id}/versions/{versionId}/publish:
+    post:
+      summary: Publica uma versão específica (Torna imutável)
+      tags: [Versões]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Versão publicada com sucesso
+
   /v1/templates/{id}/execute:
     post:
-      summary: Executa a renderização e registra o log
+      summary: Executa a renderização e registra auditoria
       tags: [Execução]
       parameters:
         - name: id
@@ -91,7 +123,7 @@ paths:
 
   /v1/templates/{id}/stats:
     get:
-      summary: Recupera estatísticas consolidadas (CQRS)
+      summary: Recupera estatísticas consolidadas via CQRS
       tags: [Métricas]
       parameters:
         - name: id
@@ -101,7 +133,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Estatísticas de envio do template
+          description: Estatísticas de envio
 
 components:
   schemas:
@@ -126,3 +158,11 @@ components:
         variables:
           type: object
           additionalProperties: true
+
+    InputVariableDto:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [STRING, NUMBER, BOOLEAN, DATE] }
+        required: { type: boolean }
