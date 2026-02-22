@@ -1,27 +1,23 @@
 Notification Template Engine - Fase 2 & 3: Domínio e Persistência
 
-Nesta fase, implementamos o "Coração" do sistema seguindo os princípios de Domain-Driven Design (DDD) e Arquitetura Hexagonal.
+Neste marco, implementei o núcleo da aplicação (Core) seguindo os princípios de Domain-Driven Design (DDD) e Arquitetura Hexagonal. O meu objetivo foi isolar completamente as regras de negócio das tecnologias de banco de dados e mensageria.
 
-🛠️ O que foi entregue nesta fase:
+Entregas Técnicas
 
-Modelo de Domínio: Criação do Aggregate Root NotificationTemplate e entidades filhas.
+Modelei o Aggregate Root NotificationTemplate e suas entidades relacionadas, garantindo que o estado do template seja alterado exclusivamente através de métodos de domínio.
 
-Value Objects: Uso de Java Records para SemanticVersion e InputVariable, garantindo imutabilidade.
+Implementei Value Objects como SemanticVersion e InputVariable utilizando Java Records, assegurando imutabilidade e clareza semântica.
 
-Ports & Adapters: Definição de interfaces de repositório no domínio e implementação técnica na camada de infraestrutura.
+Defini as interfaces de saída (Ports) no domínio e desenvolvi seus respectivos adaptadores de infraestrutura para o MongoDB.
 
-MongoDB Integration: Configuração de repositórios Spring Data para persistência dos templates e logs de execução.
+Integrei o Spring Data MongoDB para a persistência de templates e logs de execução.
 
-🧱 Padrões Utilizados:
+Implementei testes de integração utilizando Testcontainers para garantir que a camada de dados se comporte de maneira idêntica ao ambiente de produção.
 
-Soft Delete: Templates não são removidos fisicamente, mantendo a integridade histórica.
+Padrões de Projeto e Integridade
 
-Optimistic Locking: Uso de @Version para evitar que edições simultâneas causem perda de dados.
+Soft Delete: Implementei o arquivamento lógico para preservar o histórico e garantir a rastreabilidade exigida para auditoria, sem remover fisicamente os dados.
 
-Multi-tenancy: Todos os modelos de persistência incluem orgId e workspaceId para isolamento lógico de dados.
+Optimistic Locking: Utilizei o controle de concorrência via @Version para mitigar riscos de Race Conditions em ambientes distribuídos.
 
-🚀 Próximos Passos:
-
-Implementação da camada de aplicação (Services) e lógica de versionamento.
-
-Configuração do motor de renderização de placeholders.
+Multi-tenancy: Desenhei a estrutura de dados com isolamento por orgId e workspaceId desde o início, garantindo a segurança e o isolamento entre diferentes inquilinos.
