@@ -1,31 +1,38 @@
 Notification Template Engine - Fase 1: Infraestrutura
 
-Nesta etapa inicial, estabeleci a base tecnológica do projeto para garantir que o ambiente de desenvolvimento fosse padronizado e isolado através de containers. Meu foco principal foi a automação do setup e a garantia de integridade desde o primeiro commit.
+Nesta etapa inicial, meu foco foi garantir que qualquer pessoa que clonasse
+o projeto conseguisse rodar tudo com um único comando, sem configurações
+manuais de porta ou endereço. Padronização desde o primeiro commit.
 
-Entregas Técnicas
+Entregas desta fase
 
-Configurei o ecossistema Java 21 e Gradle, utilizando as funcionalidades mais recentes da linguagem para garantir um código moderno e eficiente.
+Configurei o ecossistema Java 21 com Gradle (Kotlin DSL), aproveitando as
+features mais recentes da linguagem que uso nas fases seguintes.
 
-Realizei a orquestração de serviços via Docker Compose, integrando o MongoDB para persistência e o Kafka para mensageria.
+Orquestrei os serviços via Docker Compose: MongoDB para persistência e Kafka
+para mensageria, ambos integrados nativamente ao Spring Boot para o ambiente
+de desenvolvimento.
 
-Implementei o pipeline de Integração Contínua (CI) via GitHub Actions, configurado para validar builds e executar testes automaticamente em cada push ou pull request.
+Implementei o pipeline de CI via GitHub Actions para validar builds e rodar
+os testes automaticamente em cada push.
 
-Decisões Técnicas e Fundamentação
+Decisões técnicas
 
-Kafka em modo KRaft: Optei por utilizar o Kafka sem a dependência do Zookeeper. Essa escolha simplifica a topologia da infraestrutura, reduz o consumo de memória e facilita a manutenção do ambiente, seguindo a tendência atual da comunidade.
+Kafka em modo KRaft: escolha deliberada para rodar sem Zookeeper. Simplifica
+a topologia, reduz o consumo de memória e segue a direção que a comunidade
+Kafka está tomando desde a versão 3.x.
 
-Integração Nativa Spring Boot: Configurei a aplicação para reconhecer os containers Docker automaticamente durante o tempo de desenvolvimento, eliminando a necessidade de configurações manuais de portas e endereços no ambiente local.
+Docker Compose com integração nativa Spring Boot: a aplicação descobre os
+containers automaticamente em tempo de desenvolvimento, sem variáveis de
+ambiente manuais.
 
-Como Validar
+Como validar
 
-Certifique-se de que o Docker Desktop está em execução.
+Com o Docker Desktop em execução:
 
-Execute o comando: docker-compose up -d
+  docker-compose up -d
 
-Os serviços estarão disponíveis nos endereços padrão:
-
-MongoDB: localhost:27017
-
-Kafka: localhost:9092
-
-Kafdrop (Visualizador do Kafka): http://localhost:9000
+Serviços disponíveis:
+  MongoDB   → localhost:27017
+  Kafka     → localhost:9092
+  Kafdrop   → http://localhost:9000
