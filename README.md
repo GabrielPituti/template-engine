@@ -4,12 +4,16 @@ Microsserviço multi-tenant para gestão e execução de templates de
 notificação em múltiplos canais (E-mail, SMS e Webhook). Construído com
 foco em segurança operacional, integridade de dados e observabilidade.
 
+---
+
 Arquitetura
 
 Utilizei Arquitetura Hexagonal (Ports & Adapters) para manter o domínio
 isolado de tecnologias externas. A modelagem segue Domain-Driven Design,
 com NotificationTemplate como Aggregate Root controlando o ciclo de vida
 e a imutabilidade das versões.
+
+---
 
 O que foi implementado
 
@@ -28,37 +32,47 @@ channel, status e orgId prontas para Grafana.
 Consistência distribuída: Optimistic Locking via @Version para prevenir
 lost updates em edições concorrentes.
 
+---
+
 Stack
 
-Java 21 (Records, Sealed Interfaces, Pattern Matching)
-Spring Boot 3.5.11
-MongoDB + Spring Data
-Kafka (KRaft mode)
-OpenAPI 3.1 / Swagger UI
-JUnit 5 + Testcontainers + MapStruct + Caffeine
+    Java 21 (Records, Sealed Interfaces, Pattern Matching)
+    Spring Boot 3.5.11
+    MongoDB + Spring Data
+    Kafka (KRaft mode)
+    OpenAPI 3.1 / Swagger UI
+    JUnit 5 + Testcontainers + MapStruct + Caffeine
+
+---
 
 Como executar
 
-1. Requisitos: Java 21 e Docker instalados
-2. docker-compose up -d
-3. ./gradlew bootRun
-4. http://localhost:8080/swagger-ui.html
+    1. Requisitos: Java 21 e Docker instalados
+    2. docker-compose up -d
+    3. ./gradlew bootRun
+    4. http://localhost:8080/swagger-ui.html
+
+---
 
 Documentação técnica complementar
 
-docs/ADR.md              → 24 decisões arquiteturais com contexto e trade-offs
-docs/ERROR_DICTIONARY.md → Códigos de erro com causas e resoluções
-docs/SCALABILITY.md      → Evolução técnica para alta disponibilidade
+    docs/ADR.md              → 24 decisões arquiteturais com contexto e trade-offs
+    docs/ERROR_DICTIONARY.md → Códigos de erro com causas e resoluções
+    docs/SCALABILITY.md      → Evolução técnica para alta disponibilidade
 
 ![Diagrama de Arquitetura](docs/architecture_diagram.png)
 
+---
+
 Histórico de desenvolvimento
 
-feat/infrastructure-setup    → Docker, Kafka KRaft, CI/CD
-feat/domain-persistence      → DDD, MongoDB, Testcontainers
-feat/business-logic          → RenderEngine, SchemaValidator, SemanticVersion
-feat/api-messaging-plus      → REST, Kafka, CQRS, Cache, MapStruct
-feat/observability-and-review→ Micrometer, encapsulamento DDD, resiliência
+    feat/infrastructure-setup     → Docker, Kafka KRaft, CI/CD
+    feat/domain-persistence       → DDD, MongoDB, Testcontainers
+    feat/business-logic           → RenderEngine, SchemaValidator, SemanticVersion
+    feat/api-messaging-plus       → REST, Kafka, CQRS, Cache, MapStruct
+    feat/observability-and-review → Micrometer, encapsulamento DDD, resiliência
+
+---
 
 O que faria diferente com mais tempo
 
@@ -77,6 +91,8 @@ Testes de contrato com Pact: para garantir que evoluções na API não quebrem
 consumidores em ambiente multi-tenant.
 
 MongoDB Replica Set: para habilitar transações ACID reais multi-documento.
+
+---
 
 Trade-offs conscientes
 
