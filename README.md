@@ -1,23 +1,37 @@
 Notification Template Engine - Fase 2 & 3: Domínio e Persistência
 
-Neste marco, implementei o núcleo da aplicação (Core) seguindo os princípios de Domain-Driven Design (DDD) e Arquitetura Hexagonal. O meu objetivo foi isolar completamente as regras de negócio das tecnologias de banco de dados e mensageria.
+Neste marco implementei o núcleo real da aplicação. O objetivo central foi
+garantir que as regras de negócio não dependessem de nada de infraestrutura
+— o domínio precisa ser testável de forma isolada, sem banco, sem Kafka.
 
-Entregas Técnicas
+O que foi construído
 
-Modelei o Aggregate Root NotificationTemplate e suas entidades relacionadas, garantindo que o estado do template seja alterado exclusivamente através de métodos de domínio.
+Modelei o Aggregate Root NotificationTemplate garantindo que qualquer
+mudança de estado passe obrigatoriamente pelos métodos de domínio. Nenhum
+setter público exposto onde não deveria estar.
 
-Implementei Value Objects como SemanticVersion e InputVariable utilizando Java Records, assegurando imutabilidade e clareza semântica.
+Implementei os Value Objects SemanticVersion e InputVariable como Java
+Records — imutáveis por natureza, sem boilerplate.
 
-Defini as interfaces de saída (Ports) no domínio e desenvolvi seus respectivos adaptadores de infraestrutura para o MongoDB.
+Defini as interfaces de saída (Ports) no domínio e seus adaptadores
+correspondentes para o MongoDB na camada de infraestrutura.
 
-Integrei o Spring Data MongoDB para a persistência de templates e logs de execução.
+Adicionei testes de integração com Testcontainers para cobrir os
+comportamentos que mocks não conseguem simular com precisão — timezone,
+concorrência otimista e queries com filtros dinâmicos.
 
-Implementei testes de integração utilizando Testcontainers para garantir que a camada de dados se comporte de maneira idêntica ao ambiente de produção.
+Decisões de design
 
-Padrões de Projeto e Integridade
+Soft Delete: optei pelo arquivamento lógico em vez de remoção física porque
+o NotificationExecution referencia o templateId como chave de auditoria.
+Remover o template tornaria esse log órfão, quebrando a rastreabilidade de
+quem recebeu o quê e quando.
 
-Soft Delete: Implementei o arquivamento lógico para preservar o histórico e garantir a rastreabilidade exigida para auditoria, sem remover fisicamente os dados.
+Optimistic Locking via @Version: proteção contra o cenário onde dois
+administradores editam o mesmo template simultaneamente. O Spring Data lança
+OptimisticLockingFailureException, capturado pelo GlobalExceptionHandler
+com HTTP 409.
 
-Optimistic Locking: Utilizei o controle de concorrência via @Version para mitigar riscos de Race Conditions em ambientes distribuídos.
-
-Multi-tenancy: Desenhei a estrutura de dados com isolamento por orgId e workspaceId desde o início, garantindo a segurança e o isolamento entre diferentes inquilinos.
+Multi-tenancy nativo: orgId e workspaceId estão presentes em todas as
+queries desde o início. Isolamento de dados por inquilino garantido no
+nível de persistência, não na lógica da aplicação.
