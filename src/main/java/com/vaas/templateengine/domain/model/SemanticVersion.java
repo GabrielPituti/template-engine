@@ -23,7 +23,7 @@ public record SemanticVersion(int major, int minor, int patch) implements Compar
     }
 
     /**
-     * Incrementa a versão minoritária (Minor), indicando adição de funcionalidades ou alteração de schema.
+     * Incrementa a versão menor (Minor), indicando adição de funcionalidades ou alteração de schema.
      * @return Nova instância com minor incrementado e patch zerado.
      */
     public SemanticVersion nextMinor() {

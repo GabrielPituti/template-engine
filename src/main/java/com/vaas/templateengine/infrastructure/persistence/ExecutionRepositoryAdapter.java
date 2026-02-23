@@ -8,7 +8,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Repository;
 
 /**
- * Adapter para a execução. Como é um log simples, podemos usar uma interface interna.
+ * Adaptador de infraestrutura para persistência de logs de execução.
+ * Implementa o contrato definido na camada de domínio, isolando a tecnologia
+ * de persistência (MongoDB) das regras de negócio.
  */
 @Component
 @RequiredArgsConstructor
@@ -22,6 +24,5 @@ public class ExecutionRepositoryAdapter implements NotificationExecutionReposito
     }
 }
 
-// Interface auxiliar para o Spring Data
 @Repository
 interface SpringDataMongoExecutionRepository extends MongoRepository<NotificationExecution, String> {}

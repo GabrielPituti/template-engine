@@ -2,7 +2,7 @@ spring:
   application:
     name: template-engine
 
-  # Suporte nativo ao Docker Compose (Spring Boot 3.5+)
+  # Integração nativa com Docker Compose (Spring Boot 3.5+)
   docker:
     compose:
       enabled: true
@@ -11,6 +11,8 @@ spring:
   data:
     mongodb:
       database: template_engine
+      # Mantém compatibilidade com o formato de UUID legado do Mongo se necessário
+      uuid-representation: java_legacy
 
   kafka:
     bootstrap-servers: localhost:9092
@@ -18,10 +20,25 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     consumer:
-      group-id: template-engine-group
+      group-id: template-engine-stats
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.vaas.templateengine.domain.event"
+
+  cache:
+    type: caffeine
+    cache-names: templates
+
+# Configuração do SpringDoc para OpenAPI 3.1
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+    url: /openapi.yaml
 
 server:
   port: 8080
@@ -30,4 +47,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, metrics
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.data.mongodb.core.MongoTemplate: DEBUG
+    com.vaas.templateengine: INFO

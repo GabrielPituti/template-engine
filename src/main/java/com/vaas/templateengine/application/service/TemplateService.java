@@ -1,10 +1,20 @@
 package com.vaas.templateengine.application.service;
 
+import com.vaas.templateengine.application.dto.TemplateMapper;
+import com.vaas.templateengine.domain.event.*;
 import com.vaas.templateengine.domain.model.*;
 import com.vaas.templateengine.domain.port.NotificationExecutionRepository;
 import com.vaas.templateengine.domain.port.NotificationTemplateRepository;
+import com.vaas.templateengine.infrastructure.messaging.NotificationProducer;
+import com.vaas.templateengine.infrastructure.persistence.TemplateStatsRepository;
 import com.vaas.templateengine.shared.exception.BusinessException;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,21 +24,23 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Serviço de Aplicação que orquestra as regras de negócio de templates.
- * Implementa as lógicas de imutabilidade, versionamento semântico e auditoria.
+ * Maestro da lógica de aplicação.
+ * Orquestra as transações ACID entre o domínio rico e os adaptadores de infraestrutura,
+ * garantindo a emissão de eventos e métricas operacionais.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TemplateService {
 
     private final NotificationTemplateRepository templateRepository;
     private final NotificationExecutionRepository executionRepository;
+    private final TemplateStatsRepository statsRepository;
     private final SchemaValidator schemaValidator;
     private final RenderEngine renderEngine;
+    private final NotificationProducer eventProducer;
+    private final MeterRegistry meterRegistry;
 
-    /**
-     * Cria um novo template com uma versão inicial em rascunho (1.0.0).
-     */
     @Transactional
     public NotificationTemplate createTemplate(String name, String description, Channel channel, String orgId, String workspaceId) {
         NotificationTemplate template = NotificationTemplate.builder()
@@ -42,55 +54,124 @@ public class TemplateService {
                 .updatedAt(OffsetDateTime.now())
                 .build();
 
-        TemplateVersion initialVersion = TemplateVersion.builder()
+        TemplateVersion initial = TemplateVersion.builder()
                 .id(UUID.randomUUID().toString())
                 .version(SemanticVersion.initial())
                 .estado(VersionState.DRAFT)
+                .subject("Novo Template: " + name)
+                .body("Olá {{nome}}")
+                .inputSchema(List.of(new InputVariable("nome", VariableType.STRING, true)))
+                .changelog("Criação inicial.")
                 .createdAt(OffsetDateTime.now())
                 .build();
 
-        template.addVersion(initialVersion);
-        return templateRepository.save(template);
+        template.addVersion(initial);
+        NotificationTemplate saved = templateRepository.save(template);
+        eventProducer.publish(new TemplateCreatedEvent(saved.getId(), OffsetDateTime.now(), saved.getName()));
+        return saved;
     }
 
-    /**
-     * Atualiza o conteúdo de um template.
-     * Se a última versão estiver em DRAFT, ela é modificada.
-     * Se estiver PUBLISHED, uma nova versão semântica é criada automaticamente.
-     */
+    public Page<NotificationTemplate> listTemplates(
+            String orgId, String workspaceId, Channel channel, TemplateStatus status, Pageable pageable) {
+        return templateRepository.findAll(orgId, workspaceId, channel, status, pageable);
+    }
+
     @Transactional
-    public NotificationTemplate updateTemplate(String id, String subject, String body, List<InputVariable> schema, String changelog) {
+    @CacheEvict(value = "templates", key = "#id")
+    public NotificationTemplate createVersion(String id, TemplateMapper.CreateVersionRequest request, List<InputVariable> schema) {
         NotificationTemplate template = getById(id);
-
-        TemplateVersion latest = template.getVersions().stream()
+        TemplateVersion lastVersion = template.getVersions().stream()
                 .max(TemplateVersion::compareTo)
-                .orElseThrow(() -> new BusinessException("Versão não encontrada", "VERSION_NOT_FOUND"));
+                .orElseThrow();
 
-        if (latest.getEstado() == VersionState.DRAFT) {
-            atualizarRascunho(latest, subject, body, schema, changelog);
-        } else {
-            criarNovaVersao(template, latest, subject, body, schema, changelog);
-        }
+        SemanticVersion next = request.isMinor() ? lastVersion.getVersion().nextMinor() : lastVersion.getVersion().nextPatch();
 
-        template.setUpdatedAt(OffsetDateTime.now());
+        TemplateVersion newVersion = TemplateVersion.builder()
+                .id(UUID.randomUUID().toString())
+                .version(next)
+                .estado(VersionState.DRAFT)
+                .subject(request.subject())
+                .body(request.body())
+                .inputSchema(schema)
+                .changelog(request.changelog())
+                .createdAt(OffsetDateTime.now())
+                .build();
+
+        template.addVersion(newVersion);
         return templateRepository.save(template);
     }
 
-    /**
-     * Executa a renderização de um template para um conjunto de destinatários.
-     * Realiza validação de schema, substituição de variáveis e gera log de auditoria.
-     */
+    @Transactional
+    @CacheEvict(value = "templates", key = "#templateId")
+    public NotificationTemplate updateVersion(String templateId, String versionId, String body, String subject, List<InputVariable> schema, String changelog) {
+        NotificationTemplate template = getById(templateId);
+        TemplateVersion version = template.getVersion(versionId);
+
+        version.updateContent(body, subject, schema, changelog);
+        template.setUpdatedAt(OffsetDateTime.now());
+
+        return templateRepository.save(template);
+    }
+
+    @Cacheable(value = "templates", key = "#id")
+    public NotificationTemplate getById(String id) {
+        return templateRepository.findById(id)
+                .orElseThrow(() -> new BusinessException("Template não encontrado: " + id, "TEMPLATE_NOT_FOUND"));
+    }
+
+    public TemplateStatsView getStats(String templateId) {
+        return statsRepository.findById(templateId)
+                .orElse(TemplateStatsView.builder().templateId(templateId).build());
+    }
+
+    @Transactional
+    @CacheEvict(value = "templates", key = "#templateId")
+    public NotificationTemplate publishVersion(String templateId, String versionId) {
+        NotificationTemplate template = getById(templateId);
+        TemplateVersion version = template.getVersion(versionId);
+
+        version.publish();
+        NotificationTemplate saved = templateRepository.save(template);
+
+        eventProducer.publish(new TemplateVersionPublishedEvent(templateId, OffsetDateTime.now(), versionId));
+        return saved;
+    }
+
+    @Transactional
+    @CacheEvict(value = "templates", key = "#templateId")
+    public void archiveTemplate(String templateId) {
+        NotificationTemplate template = getById(templateId);
+        template.archive();
+        templateRepository.save(template);
+        eventProducer.publish(new TemplateArchivedEvent(templateId, OffsetDateTime.now()));
+    }
+
     @Transactional
     public NotificationExecution executeTemplate(String templateId, String versionId, List<String> recipients, Map<String, Object> variables) {
         NotificationTemplate template = getById(templateId);
-        TemplateVersion version = localizarVersaoParaExecucao(template, versionId);
 
-        // Validação clínica de tipos e obrigatoriedade
-        schemaValidator.validate(version.getInputSchema(), variables);
+        if (template.getStatus() == TemplateStatus.ARCHIVED) {
+            recordMetric(template, "ARCHIVED_ERROR");
+            throw new BusinessException("Operação negada: template arquivado.", "TEMPLATE_ARCHIVED");
+        }
 
-        // Renderização com proteção contra XSS se for canal de E-mail
-        boolean deveEscaparHtml = template.getChannel() == Channel.EMAIL;
-        String content = renderEngine.render(version.getBody(), variables, deveEscaparHtml);
+        TemplateVersion version = (versionId != null) ? template.getVersion(versionId) : template.getLatestPublishedVersion();
+
+        if (!version.isPublished()) {
+            recordMetric(template, "DRAFT_ERROR");
+            throw new BusinessException("Versão em rascunho não pode ser executada.", "VERSION_NOT_PUBLISHED");
+        }
+
+        ExecutionStatus status = ExecutionStatus.SUCCESS;
+        String renderedContent;
+
+        try {
+            schemaValidator.validate(version.getInputSchema(), variables);
+            renderedContent = renderEngine.render(version.getBody(), variables, template.getChannel() == Channel.EMAIL);
+        } catch (BusinessException e) {
+            status = ExecutionStatus.VALIDATION_ERROR;
+            renderedContent = "Falha de validação técnica.";
+        }
 
         NotificationExecution execution = NotificationExecution.builder()
                 .id(UUID.randomUUID().toString())
@@ -98,74 +179,26 @@ public class TemplateService {
                 .versionId(version.getId())
                 .recipients(recipients)
                 .variables(variables)
-                .renderedContent(content)
-                .status(ExecutionStatus.SUCCESS)
+                .renderedContent(renderedContent)
+                .status(status)
                 .executedOn(OffsetDateTime.now())
                 .build();
 
-        return executionRepository.save(execution);
+        NotificationExecution saved = executionRepository.save(execution);
+        eventProducer.publish(new NotificationDispatchedEvent(templateId, status.name()));
+        recordMetric(template, status.name());
+
+        return saved;
     }
 
-    public NotificationTemplate getById(String id) {
-        return templateRepository.findById(id)
-                .orElseThrow(() -> new BusinessException("Template não encontrado", "TEMPLATE_NOT_FOUND"));
-    }
+    private void recordMetric(NotificationTemplate template, String resultStatus) {
+        String channel = template.getChannel() != null ? template.getChannel().name() : "UNKNOWN";
+        String orgId = template.getOrgId() != null ? template.getOrgId() : "UNKNOWN";
 
-    @Transactional
-    public NotificationTemplate publishVersion(String templateId, String versionId) {
-        NotificationTemplate template = getById(templateId);
-
-        TemplateVersion version = template.getVersions().stream()
-                .filter(v -> v.getId().equals(versionId))
-                .findFirst()
-                .orElseThrow(() -> new BusinessException("Versão não encontrada", "VERSION_NOT_FOUND"));
-
-        if (version.isPublished()) {
-            throw new BusinessException("Esta versão já está publicada", "VERSION_ALREADY_PUBLISHED");
-        }
-
-        version.setEstado(VersionState.PUBLISHED);
-        template.setUpdatedAt(OffsetDateTime.now());
-        return templateRepository.save(template);
-    }
-
-    private void atualizarRascunho(TemplateVersion draft, String subject, String body, List<InputVariable> schema, String changelog) {
-        draft.setSubject(subject);
-        draft.setBody(body);
-        draft.setInputSchema(schema);
-        draft.setChangelog(changelog);
-        draft.setCreatedAt(OffsetDateTime.now());
-    }
-
-    private void criarNovaVersao(NotificationTemplate template, TemplateVersion latest, String subject, String body, List<InputVariable> schema, String changelog) {
-        // Incremento Minor se o schema mudar (quebra de contrato), caso contrário Patch
-        SemanticVersion nextVersion = !latest.getInputSchema().equals(schema)
-                ? latest.getVersion().nextMinor()
-                : latest.getVersion().nextPatch();
-
-        template.addVersion(TemplateVersion.builder()
-                .id(UUID.randomUUID().toString())
-                .version(nextVersion)
-                .subject(subject)
-                .body(body)
-                .inputSchema(schema)
-                .estado(VersionState.DRAFT)
-                .changelog(changelog)
-                .createdAt(OffsetDateTime.now())
-                .build());
-    }
-
-    private TemplateVersion localizarVersaoParaExecucao(NotificationTemplate template, String versionId) {
-        if (versionId != null) {
-            return template.getVersions().stream()
-                    .filter(v -> v.getId().equals(versionId))
-                    .findFirst()
-                    .orElseThrow(() -> new BusinessException("Versão não encontrada", "VERSION_NOT_FOUND"));
-        }
-
-        return template.getVersions().stream()
-                .filter(TemplateVersion::isPublished)
-                .max(TemplateVersion::compareTo)
-                .orElseThrow(() -> new BusinessException("Nenhuma versão publicada disponível", "NO_PUBLISHED_VERSION"));
+        meterRegistry.counter("notifications.execution.total",
+                "channel", channel,
+                "status", resultStatus,
+                "orgId", orgId
+        ).increment();
     }
 }

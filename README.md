@@ -1,59 +1,40 @@
-Notification Template Engine
+Notification Template Engine - Fase 6: Observabilidade e Revisão Final
 
-Este projeto é um microsserviço multi-tenant de alto desempenho que desenvolvi para gerenciar e executar templates de notificação através de múltiplos canais como E-mail, SMS e Webhook. A solução foi construída com foco em escalabilidade, segurança e integridade total dos dados.
+Nesta etapa fechei as pontas: métricas operacionais, encapsulamento completo
+do domínio e resiliência no consumer Kafka.
 
-Visão Geral e Arquitetura
+O que foi feito
 
-Utilizei a Arquitetura Hexagonal (Ports & Adapters) para garantir que as regras de negócio fossem independentes de tecnologias externas. A modelagem seguiu rigorosamente os padrões de Domain-Driven Design (DDD), tratando o template como um Aggregate Root que protege suas versões e estados internos.
+Observabilidade com Micrometer: adicionei o contador
+notifications.execution.total com tags de channel, status e orgId. A escolha
+por métricas multidimensionais em vez de logs simples permite que o time de
+SRE filtre por inquilino ou canal diretamente no Grafana, sem queries
+custosas no banco. Disponível em:
+http://localhost:8080/actuator/metrics/notifications.execution.total
 
-Diferenciais Técnicos que Implementei
+Encapsulamento do Aggregate Root: removi os setters públicos desnecessários
+e adicionei o método updateInformation() com validação de estado. Qualquer
+mudança no template agora passa pelas invariantes de negócio — incluindo a
+trava que bloqueia edições em templates arquivados.
 
-Versionamento Semântico: Controle rígido de versões (Major.Minor.Patch) com bloqueio de edição para conteúdos já publicados.
+Imutabilidade de versões publicadas: o método updateContent() na
+TemplateVersion lança VERSION_IMMUTABLE se a versão já estiver publicada.
+Versão publicada é registro histórico — não pode ser alterada.
 
-Motor de Renderização Seguro: Proteção nativa contra ataques de ReDoS e injeção de scripts (XSS).
+Resiliência no Consumer: o NotificationConsumer tem try-catch estruturado
+isolando falhas de projeção. Se o banco de estatísticas estiver instável, o
+consumo do tópico principal continua sem interrupção.
 
-Mensageria e CQRS: Comunicação assíncrona via Kafka para atualização de projeções de leitura, garantindo performance em consultas analíticas.
+Sobre as decisões de design
 
-Observabilidade: Registro de métricas customizadas via Micrometer para monitoramento granular por organização e canal.
+Preferi Micrometer a logs para métricas porque logs exigem parsing posterior
+para agregar dados — métricas com tags já chegam prontas para dashboards.
 
-Performance: Implementação de cache agressivo de leitura para templates estáveis utilizando Caffeine.
+Fechar o agregado contra mutações externas garante que o disparo de eventos
+Kafka ocorra sempre junto da mudança de estado, nunca desacoplado.
 
-Stack Tecnológica
+Garantia de qualidade
 
-Linguagem: Java 21 (Records, Sealed Interfaces, Pattern Matching)
-
-Framework: Spring Boot 3.5
-
-Persistência: MongoDB
-
-Mensageria: Kafka (KRaft mode)
-
-Documentação: OpenAPI 3.1 / Swagger UI
-
-Infraestrutura de Testes: Testcontainers e JUnit 5
-
-Como Executar o Projeto
-
-Certifique-se de possuir o Java 21 e o Docker instalados.
-
-Inicie a infraestrutura: docker-compose up -d
-
-Execute a aplicação: ./gradlew bootRun
-
-Acesse a documentação da API em: http://localhost:8080/swagger-ui.html
-
-Estrutura de Desenvolvimento
-
-Organizei a entrega de forma incremental através das seguintes branches:
-
-main: Versão consolidada e pronta para produção.
-
-feat/infrastructure-setup: Base de containers e CI/CD.
-
-feat/domain-persistence: Modelagem e camada de dados.
-
-feat/business-logic: Motor de renderização e versionamento.
-
-feat/api-messaging-plus: REST, Kafka, CQRS e Cache.
-
-feat/observability-and-review: Métricas, refinamento de DDD e ajustes finais de segurança.
+Pirâmide de testes aplicada: unitários com Mockito para velocidade e
+cobertura de regras de negócio; Testcontainers apenas para persistência e
+concorrência, onde o mock seria impreciso.

@@ -9,26 +9,35 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Componente responsável pela interpolação de variáveis em templates.
- * Utiliza expressões regulares compiladas para garantir alta performance sob carga.
+ * Motor de interpolação de strings responsável pela resolução de placeholders.
+ * A implementação prioriza a segurança contra ataques de negação de serviço (ReDoS)
+ * através de expressões regulares não-gananciosas e limites rígidos de carga útil.
  */
 @Component
 public class RenderEngine {
 
-    /** Regex para identificar padrões {{variavel}} */
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{(.+?)\\}\\}");
+    private static final int MAX_CONTENT_LENGTH = 50_000;
 
     /**
-     * Renderiza o conteúdo substituindo placeholders por valores do contexto.
-     * @param content O texto bruto do template.
-     * @param variables Mapa de dados para preenchimento.
-     * @param shouldEscapeHtml Se verdadeiro, aplica escape de caracteres HTML para prevenir XSS.
-     * @return Conteúdo final processado.
-     * @throws BusinessException Caso uma variável obrigatória no template não seja fornecida.
+     * Realiza a substituição dinâmica de placeholders por valores do contexto.
+     * Utiliza StringBuilder para otimização de memória e Matcher.quoteReplacement
+     * para garantir a integridade de caracteres especiais durante a substituição.
+     * @param content Template bruto com sintaxe {{variavel}}.
+     * @param variables Mapa de contexto fornecido para a execução.
+     * @param shouldEscapeHtml Ativa a sanitização para proteção contra Cross-Site Scripting (XSS).
+     * @return Conteúdo final processado e seguro.
      */
     public String render(String content, Map<String, Object> variables, boolean shouldEscapeHtml) {
         if (content == null || content.isEmpty()) {
             return "";
+        }
+
+        if (content.length() > MAX_CONTENT_LENGTH) {
+            throw new BusinessException(
+                    "O conteúdo excede o limite de segurança operacional.",
+                    "TEMPLATE_TOO_LARGE"
+            );
         }
 
         StringBuilder sb = new StringBuilder();
@@ -40,20 +49,15 @@ public class RenderEngine {
 
             if (value == null) {
                 throw new BusinessException(
-                        "Variável obrigatória ausente no contexto de renderização: " + key,
+                        "Variável obrigatória ausente no contexto: " + key,
                         "MISSING_REQUIRED_VARIABLE"
                 );
             }
 
             String stringValue = value.toString();
+            String processedValue = shouldEscapeHtml ? HtmlUtils.htmlEscape(stringValue) : stringValue;
 
-            // Mitigação de ataques XSS para canais que interpretam HTML (ex: E-mail)
-            if (shouldEscapeHtml) {
-                stringValue = HtmlUtils.htmlEscape(stringValue);
-            }
-
-            // QuoteReplacement garante que caracteres especiais no valor não quebrem a regex
-            matcher.appendReplacement(sb, Matcher.quoteReplacement(stringValue));
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(processedValue));
         }
         matcher.appendTail(sb);
 

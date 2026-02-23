@@ -1,5 +1,6 @@
 package com.vaas.templateengine.infrastructure.persistence;
 
+import com.vaas.templateengine.TestcontainersConfiguration;
 import com.vaas.templateengine.domain.model.Channel;
 import com.vaas.templateengine.domain.model.NotificationTemplate;
 import com.vaas.templateengine.domain.model.TemplateStatus;
@@ -8,7 +9,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.OffsetDateTime;
@@ -16,60 +19,48 @@ import java.time.OffsetDateTime;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Testes de integração para a camada de persistência.
- * Valida o comportamento do banco de dados e controle de concorrência.
+ * Testes de integração para validação da camada de persistência e filtros dinâmicos.
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@DisplayName("Persistência e Concorrência de Templates")
+@Import(TestcontainersConfiguration.class)
+@DisplayName("Persistência: Filtros e Concorrência")
 class NotificationTemplatePersistenceIT {
 
     @Autowired
     private NotificationTemplateRepository repository;
 
-    /**
-     * Valida o ciclo básico de persistência e recuperação de um agregado.
-     */
     @Test
-    @DisplayName("Deve salvar e recuperar um template com sucesso")
-    void shouldSaveAndRetrieveTemplate() {
-        NotificationTemplate template = NotificationTemplate.builder()
-                .name("Welcome Email")
-                .channel(Channel.EMAIL)
-                .orgId("org-1")
-                .workspaceId("wp-1")
-                .status(TemplateStatus.ACTIVE)
-                .createdAt(OffsetDateTime.now())
-                .build();
+    @DisplayName("Deve realizar busca paginada aplicando filtros opcionais e ignorando nulos")
+    void shouldFilterTemplatesCorrectly() {
+        repository.save(NotificationTemplate.builder()
+                .name("Email Tpl").channel(Channel.EMAIL).orgId("org-1").workspaceId("wp-1")
+                .status(TemplateStatus.ACTIVE).createdAt(OffsetDateTime.now()).build());
 
-        NotificationTemplate saved = repository.save(template);
-        assertNotNull(saved.getId());
-        assertEquals(0L, saved.getInternalVersion());
+        repository.save(NotificationTemplate.builder()
+                .name("SMS Tpl").channel(Channel.SMS).orgId("org-1").workspaceId("wp-1")
+                .status(TemplateStatus.ACTIVE).createdAt(OffsetDateTime.now()).build());
+
+        var emailOnly = repository.findAll("org-1", "wp-1", Channel.EMAIL, null, PageRequest.of(0, 10));
+        assertEquals(1, emailOnly.getTotalElements());
+
+        var all = repository.findAll("org-1", "wp-1", null, null, PageRequest.of(0, 10));
+        assertEquals(2, all.getTotalElements());
     }
 
-    /**
-     * Valida se o controle de concorrência otimista (Optimistic Locking) impede
-     * que edições simultâneas sobreescrevam dados incorretamente.
-     */
     @Test
     @DisplayName("Deve lançar OptimisticLockingFailureException em caso de edições simultâneas")
     void shouldHandleRaceConditionWithOptimisticLocking() {
         NotificationTemplate original = repository.save(NotificationTemplate.builder()
-                .name("Race Test")
-                .orgId("org-1")
-                .status(TemplateStatus.ACTIVE)
-                .createdAt(OffsetDateTime.now())
-                .build());
+                .name("Race Test").orgId("org-1").status(TemplateStatus.ACTIVE).createdAt(OffsetDateTime.now()).build());
 
-        NotificationTemplate inst1 = repository.findById(original.getId()).get();
-        NotificationTemplate inst2 = repository.findById(original.getId()).get();
+        NotificationTemplate inst1 = repository.findById(original.getId()).orElseThrow();
+        NotificationTemplate inst2 = repository.findById(original.getId()).orElseThrow();
 
-        inst1.setName("Update 1");
+        inst1.updateInformation("Update 1", original.getDescription());
         repository.save(inst1);
 
-        inst2.setName("Update 2");
-        assertThrows(OptimisticLockingFailureException.class, () -> {
-            repository.save(inst2);
-        });
+        inst2.updateInformation("Update 2", original.getDescription());
+        assertThrows(OptimisticLockingFailureException.class, () -> repository.save(inst2));
     }
 }

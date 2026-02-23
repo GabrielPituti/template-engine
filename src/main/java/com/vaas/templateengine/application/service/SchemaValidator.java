@@ -10,16 +10,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * SchemaValidator: Garante que o payload de variáveis recebido condiz
- * com o inputSchema definido no template.
+ * Componente de validação clínica de payloads de entrada.
+ * Garante a conformidade entre os dados fornecidos em tempo de execução e o contrato
+ * definido no schema do template, prevenindo falhas de renderização.
  */
 @Component
 public class SchemaValidator {
 
     /**
-     * Valida um mapa de variáveis contra uma lista de definições de variáveis.
-     * @param inputVariables Definições do schema do template
-     * @param providedVariables Valores fornecidos na requisição
+     * Valida recursivamente a obrigatoriedade e os tipos de dados das variáveis.
+     * @param inputVariables Definição do contrato esperado pelo template.
+     * @param providedVariables Valores reais fornecidos para processamento.
      */
     public void validate(List<InputVariable> inputVariables, Map<String, Object> providedVariables) {
         if (inputVariables == null || inputVariables.isEmpty()) {
@@ -29,15 +30,13 @@ public class SchemaValidator {
         for (InputVariable schemaVar : inputVariables) {
             Object value = providedVariables.get(schemaVar.name());
 
-            // 1. Validar Obrigatoriedade
             if (schemaVar.required() && value == null) {
                 throw new BusinessException(
-                        "Variável obrigatória ausente: " + schemaVar.name(),
+                        "Atributo obrigatório não informado: " + schemaVar.name(),
                         "MISSING_REQUIRED_VARIABLE"
                 );
             }
 
-            // Se o valor estiver presente, validar o tipo
             if (value != null) {
                 validateType(schemaVar.name(), schemaVar.type(), value);
             }
@@ -54,7 +53,7 @@ public class SchemaValidator {
 
         if (!isValid) {
             throw new BusinessException(
-                    String.format("Tipo inválido para variável '%s'. Esperado: %s", name, expectedType),
+                    String.format("Incompatibilidade de tipo para '%s'. Esperado: %s", name, expectedType),
                     "INVALID_VARIABLE_TYPE"
             );
         }
@@ -63,7 +62,6 @@ public class SchemaValidator {
     private boolean isValidDate(Object value) {
         if (value instanceof String str) {
             try {
-                // Validação básica de ISO-8601
                 java.time.OffsetDateTime.parse(str);
                 return true;
             } catch (DateTimeParseException e) {

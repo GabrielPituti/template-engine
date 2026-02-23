@@ -1,55 +1,61 @@
 package com.vaas.templateengine.domain.model;
 
+import com.vaas.templateengine.shared.exception.BusinessException;
 import lombok.*;
 import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * Entidade que representa uma versão específica de um template.
- * Versões em estado PUBLISHED são consideradas imutáveis para garantir integridade histórica.
+ * Representa uma iteração específica do conteúdo e contrato de dados de um template.
+ * Implementa garantias de imutabilidade para assegurar que versões já utilizadas
+ * em produção permaneçam como registros históricos fidedignos.
  */
 @Getter
-@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class TemplateVersion implements Comparable<TemplateVersion> {
 
-    /** Identificador único da versão */
     private String id;
-
-    /** Versão semântica (Major.Minor.Patch) */
     private SemanticVersion version;
-
-    /** Assunto da notificação (utilizado primordialmente em e-mails) */
     private String subject;
-
-    /** Corpo do template contendo placeholders no formato {{variavel}} */
     private String body;
-
-    /** Definição das variáveis esperadas para a correta renderização desta versão */
     private List<InputVariable> inputSchema;
 
-    /** Estado atual da versão (DRAFT ou PUBLISHED) */
+    @Setter(AccessLevel.PRIVATE)
     private VersionState estado;
 
-    /** Registro descritivo das alterações realizadas nesta versão */
     private String changelog;
-
-    /** Data de criação da versão com precisão de fuso horário */
     private OffsetDateTime createdAt;
 
     /**
-     * Verifica se a versão já foi publicada.
-     * @return true se o estado for PUBLISHED.
+     * Realiza a atualização controlada do conteúdo da versão.
+     * Esta mutação é permitida apenas enquanto a versão reside em estado de rascunho (DRAFT).
      */
+    public void updateContent(String body, String subject, List<InputVariable> inputSchema, String changelog) {
+        if (isPublished()) {
+            throw new BusinessException("Versões publicadas são imutáveis.", "VERSION_IMMUTABLE");
+        }
+        this.body = body;
+        this.subject = subject;
+        this.inputSchema = inputSchema;
+        this.changelog = changelog;
+    }
+
+    /**
+     * Transforma a versão em um artefato imutável pronto para execução.
+     */
+    public void publish() {
+        if (isPublished()) {
+            throw new BusinessException("A versão já se encontra publicada.", "VERSION_ALREADY_PUBLISHED");
+        }
+        this.estado = VersionState.PUBLISHED;
+    }
+
     public boolean isPublished() {
         return VersionState.PUBLISHED.equals(this.estado);
     }
 
-    /**
-     * Permite a ordenação de versões dentro do agregado de template.
-     */
     @Override
     public int compareTo(TemplateVersion other) {
         return this.version.compareTo(other.version);

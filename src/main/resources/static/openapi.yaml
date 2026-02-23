@@ -1,0 +1,221 @@
+openapi: 3.1.0
+info:
+  title: Notification Template Engine API
+  version: 1.0.0
+  description: |
+    API Multi-tenant para gestão, versionamento e execução de templates.
+    Princípio Contract-First com suporte a versionamento semântico e observabilidade.
+
+servers:
+  - url: http://localhost:8080
+    description: Servidor Local
+
+paths:
+  /v1/templates:
+    post:
+      summary: Cria um novo template (Aggregate Root)
+      tags: [Templates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTemplateRequest'
+      responses:
+        '201':
+          description: Template criado com sucesso
+
+    get:
+      summary: Lista templates com paginação e filtros
+      tags: [Templates]
+      parameters:
+        - name: orgId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: workspaceId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Lista retornada com sucesso
+
+  /v1/templates/{id}:
+    get:
+      summary: Busca detalhes de um template
+      tags: [Templates]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Detalhes do template
+
+    delete:
+      summary: Arquiva um template (Soft Delete)
+      tags: [Templates]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Arquivado com sucesso
+
+  /v1/templates/{id}/versions:
+    post:
+      summary: Cria uma nova versão em estado DRAFT
+      tags: [Versões]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVersionRequest'
+      responses:
+        '201':
+          description: Versão criada
+
+    get:
+      summary: Lista todas as versões de um template
+      tags: [Versões]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Lista de versões
+
+  /v1/templates/{id}/versions/{versionId}:
+    patch:
+      summary: Atualiza o conteúdo de uma versão DRAFT
+      tags: [Versões]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: versionId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateVersionRequest'
+      responses:
+        '200':
+          description: Versão atualizada
+
+  /v1/templates/{id}/versions/{versionId}/publish:
+    post:
+      summary: Publica uma versão (Imutabilidade)
+      tags: [Versões]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: versionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Publicado com sucesso
+
+  /v1/templates/{id}/execute:
+    post:
+      summary: Executa a renderização
+      tags: [Execução]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionRequest'
+      responses:
+        '200':
+          description: Conteúdo renderizado
+
+  /v1/templates/{id}/stats:
+    get:
+      summary: Estatísticas via CQRS
+      tags: [Métricas]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Estatísticas do template
+
+components:
+  schemas:
+    CreateTemplateRequest:
+      type: object
+      required: [name, channel, orgId, workspaceId]
+      properties:
+        name: { type: string }
+        channel: { type: string, enum: [EMAIL, SMS, WEBHOOK] }
+        orgId: { type: string }
+        workspaceId: { type: string }
+
+    CreateVersionRequest:
+      type: object
+      required: [body]
+      properties:
+        subject: { type: string }
+        body: { type: string }
+        changelog: { type: string }
+        isMinor: { type: boolean }
+        inputSchema:
+          type: array
+          items:
+            $ref: '#/components/schemas/InputVariableDto'
+
+    UpdateVersionRequest:
+      type: object
+      properties:
+        subject: { type: string }
+        body: { type: string }
+        changelog: { type: string }
+        inputSchema:
+          type: array
+          items:
+            $ref: '#/components/schemas/InputVariableDto'
+
+    InputVariableDto:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [STRING, NUMBER, BOOLEAN, DATE] }
+        required: { type: boolean }
+
+    ExecutionRequest:
+      type: object
+      required: [recipients, variables]
+      properties:
+        templateVersionId: { type: string }
+        recipients: { type: array, items: { type: string } }
+        variables: { type: object, additionalProperties: true }
