@@ -20,7 +20,7 @@ public class NotificationProducer {
     /**
      * Publica um evento de domínio no tópico correspondente.
      * Utiliza a chave do agregado como chave da mensagem para garantir a ordenação por partição.
-     * * @param event O evento de domínio a ser disparado.
+     * @param event O evento de domínio a ser disparado.
      */
     public void publish(DomainEvent event) {
         String topic = resolveTopic(event);

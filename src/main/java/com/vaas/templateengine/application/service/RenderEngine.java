@@ -23,7 +23,7 @@ public class RenderEngine {
      * Realiza a substituição dinâmica de placeholders por valores do contexto.
      * Utiliza StringBuilder para otimização de memória e Matcher.quoteReplacement
      * para garantir a integridade de caracteres especiais durante a substituição.
-     * * @param content Template bruto com sintaxe {{variavel}}.
+     * @param content Template bruto com sintaxe {{variavel}}.
      * @param variables Mapa de contexto fornecido para a execução.
      * @param shouldEscapeHtml Ativa a sanitização para proteção contra Cross-Site Scripting (XSS).
      * @return Conteúdo final processado e seguro.

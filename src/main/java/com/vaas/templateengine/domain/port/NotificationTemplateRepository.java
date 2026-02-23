@@ -10,7 +10,6 @@ import java.util.Optional;
 
 /**
  * Port (Interface de Saída): Define o contrato de persistência para templates.
- * Suporta busca paginada com filtros opcionais conforme RF01.
  */
 public interface NotificationTemplateRepository {
 

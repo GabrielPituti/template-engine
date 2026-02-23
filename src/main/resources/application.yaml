@@ -36,12 +36,8 @@ springdoc:
   api-docs:
     path: /v3/api-docs
   swagger-ui:
-    # URL amigável para acessar a documentação
     path: /swagger-ui.html
-    # Ordena os endpoints por método HTTP no Swagger
     operationsSorter: method
-    # Faz o Swagger UI ler o nosso arquivo estático (Contract-First)
-    # Certifique-se de salvar o openapi.yaml em src/main/resources/static/
     url: /openapi.yaml
 
 server:

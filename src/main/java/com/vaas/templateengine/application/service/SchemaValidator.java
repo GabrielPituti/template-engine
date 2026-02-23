@@ -19,7 +19,7 @@ public class SchemaValidator {
 
     /**
      * Valida recursivamente a obrigatoriedade e os tipos de dados das variáveis.
-     * * @param inputVariables Definição do contrato esperado pelo template.
+     * @param inputVariables Definição do contrato esperado pelo template.
      * @param providedVariables Valores reais fornecidos para processamento.
      */
     public void validate(List<InputVariable> inputVariables, Map<String, Object> providedVariables) {

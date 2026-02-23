@@ -11,13 +11,13 @@ import org.springframework.stereotype.Repository;
 
 /**
  * Adapter técnico para o MongoDB.
- * Utiliza JSON queries dinâmicas para suportar a filtragem opcional do RF01.
+ * Utiliza JSON queries dinâmicas para suportar filtragem opcional com parâmetros nulos.
  */
 @Repository
 public interface SpringDataMongoTemplateRepository extends MongoRepository<NotificationTemplate, String> {
 
     /**
-     * Query que ignora filtros nulos de forma sênior.
+     * Busca paginada com filtros opcionais. Parâmetros nulos são ignorados pela query.
      * O uso de lógica condicional ($or com $expr) no MongoDB garante que, se o parâmetro for nulo (null),
      * a restrição seja ignorada para aquele campo específico.
      */

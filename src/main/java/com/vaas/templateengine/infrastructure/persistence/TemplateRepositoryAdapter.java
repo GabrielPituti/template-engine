@@ -13,7 +13,7 @@ import java.util.Optional;
 
 /**
  * Adapter de infraestrutura para persistência de templates utilizando Spring Data MongoDB.
- * * Esta classe implementa a interface de saída (Port) definida na camada de domínio,
+ * Esta classe implementa a interface de saída (Port) definida na camada de domínio,
  * garantindo o desacoplamento entre as regras de negócio e a tecnologia de banco de dados.
  */
 @Component
@@ -24,7 +24,7 @@ public class TemplateRepositoryAdapter implements NotificationTemplateRepository
 
     /**
      * Persiste ou atualiza um agregado de template no repositório.
-     * * @param template Agregado a ser persistido.
+     * @param template Agregado a ser persistido.
      * @return O template com estado atualizado (incluindo ID e versão interna).
      */
     @Override
@@ -34,7 +34,7 @@ public class TemplateRepositoryAdapter implements NotificationTemplateRepository
 
     /**
      * Busca um template pelo seu identificador único.
-     * * @param id Identificador do template.
+     * @param id Identificador do template.
      * @return Optional contendo o template se encontrado.
      */
     @Override
@@ -44,8 +44,7 @@ public class TemplateRepositoryAdapter implements NotificationTemplateRepository
 
     /**
      * Recupera templates de forma paginada aplicando filtros dinâmicos de busca.
-     * Implementa a lógica exigida pelo requisito funcional RF01.
-     * * @param orgId Identificador da organização proprietária (Multi-tenancy).
+     * @param orgId Identificador da organização proprietária (Multi-tenancy).
      * @param workspaceId Identificador do workspace (Multi-tenancy).
      * @param channel Filtro opcional por canal de comunicação.
      * @param status Filtro opcional por status do template.
@@ -64,10 +63,10 @@ public class TemplateRepositoryAdapter implements NotificationTemplateRepository
 
     /**
      * Executa o arquivamento lógico (Soft Delete) do template.
-     * * Conforme o RF01, os dados não são removidos fisicamente para preservar o histórico
-     * de auditoria. A operação é delegada ao método de domínio do Agregado para garantir
+     * Os dados não são removidos fisicamente para preservar o histórico de auditoria.
+     * A operação é delegada ao método de domínio do Agregado para garantir
      * a integridade das regras de negócio.
-     * * @param id Identificador do template a ser arquivado.
+     * @param id Identificador do template a ser arquivado.
      */
     @Override
     public void deleteById(String id) {

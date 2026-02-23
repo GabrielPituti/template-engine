@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Configuração de cache local distribuída através da biblioteca Caffeine.
+ * Configuração de cache local em memória.
  * Otimiza a performance de leitura para templates estáveis (PUBLISHED), reduzindo a latência
  * e a carga sobre o MongoDB em cenários de disparos massivos de notificações.
  */

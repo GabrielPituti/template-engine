@@ -30,7 +30,8 @@ public class NotificationExecution {
 
     private List<String> recipients;
 
-    /** * Snapshot das variáveis fornecidas pelo cliente no momento exato da requisição.
+    /**
+     * Snapshot das variáveis fornecidas pelo cliente no momento exato da requisição.
      * Este estado é preservado para garantir a rastreabilidade em auditorias futuras.
      */
     private Map<String, Object> variables;

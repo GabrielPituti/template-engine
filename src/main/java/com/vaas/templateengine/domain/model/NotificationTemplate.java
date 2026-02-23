@@ -43,7 +43,8 @@ public class NotificationTemplate {
 
     private OffsetDateTime deletedAt;
 
-    /** * Mecanismo de Optimistic Locking para garantir a integridade dos dados
+    /**
+     * Mecanismo de Optimistic Locking para garantir a integridade dos dados
      * em ambientes distribuídos com alta concorrência de edição.
      */
     @Version

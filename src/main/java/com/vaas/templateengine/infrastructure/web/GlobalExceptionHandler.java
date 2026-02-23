@@ -21,7 +21,6 @@ public class GlobalExceptionHandler {
 
     /**
      * Captura erros de leitura de JSON (como enviar um texto onde deveria ser um Enum).
-     * Resolve o erro 500 que você recebeu ao testar o Swagger.
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleReadableException(HttpMessageNotReadableException ex) {
