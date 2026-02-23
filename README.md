@@ -1,25 +1,35 @@
 Notification Template Engine - Fase 4: Lógica de Negócio e Serviços
 
-Nesta etapa, desenvolvi a inteligência central da engine, transformando os requisitos funcionais em serviços robustos e regras de negócio testáveis. Foquei em garantir que a renderização de templates fosse segura, precisa e performática.
+Aqui entrou a inteligência do sistema. Motor de renderização, validação de
+schema e versionamento semântico — tudo pensado para falhar rápido e com
+mensagem clara.
 
-Entregas Técnicas
+O que foi construído
 
-TemplateService: Desenvolvi o orquestrador responsável pela gestão do ciclo de vida dos templates, incluindo criação, publicação e preparação para execução.
+Motor de Renderização: implementado com Regex não-gananciosa (.+?) e
+StringBuilder para performance. A escolha de Regex não-gananciosa não é
+acidente — ela previne ataques de ReDoS onde expressões gananciosas podem
+travar o processador em templates maliciosos. Limite de 50KB aplicado.
 
-Motor de Renderização: Implementei um motor focado em performance utilizando Regex não-gananciosa e StringBuilder, mitigando riscos de segurança como ataques de ReDoS.
+Versionamento Semântico: criei o Value Object SemanticVersion com métodos
+nextPatch() e nextMinor() encapsulando a lógica dentro do domínio. A decisão
+de qual incremento aplicar fica com o autor da versão no momento da criação
+— consciente de que inferir isso automaticamente exigiria análise de diff de
+schema, o que estava fora do escopo.
 
-Segurança e Sanitização: Incluí a proteção automática contra XSS para o canal de e-mail, garantindo que conteúdos dinâmicos não comprometam a segurança do destinatário final.
+SchemaValidator: validação clínica de tipos (STRING, NUMBER, BOOLEAN, DATE)
+e obrigatoriedade antes da renderização. Falha antecipada com código de erro
+específico, não um 500 genérico.
 
-Validador de Schema: Criei um componente dedicado para validar o payload de variáveis contra o contrato definido na versão do template, suportando tipos como STRING, NUMBER, BOOLEAN e DATE.
+Sanitização XSS: aplicada automaticamente no canal EMAIL via HtmlUtils do
+Spring. Canais SMS e WEBHOOK não recebem esse tratamento por não renderizarem
+HTML.
 
-Versionamento Automático: Implementei a lógica para incremento de versões semânticas (Patch e Minor) baseada no impacto das alterações no corpo ou no schema.
+Princípio adotado
 
-Defesa Técnica
+Mantive a lógica de transição de estado e cálculo de versão dentro dos
+próprios agregados e Value Objects. O TemplateService orquestra, não decide.
 
-Princípio Tell, Don't Ask: Mantive a lógica de cálculo de versão e transições de estado dentro dos Value Objects e Agregados, evitando uma arquitetura procedural centrada no serviço.
+Como validar
 
-Proteção de Imutabilidade: Estabeleci travas para impedir a edição de versões que já foram publicadas, assegurando a confiabilidade do histórico de disparos.
-
-Como Validar
-
-A integridade desta fase pode ser confirmada executando os testes unitários que desenvolvi: ./gradlew test. Os testes cobrem desde a substituição de placeholders até casos complexos de validação de tipos e datas.
+  ./gradlew test
