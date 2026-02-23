@@ -1,32 +1,87 @@
-Notification Template Engine - Fase 6: Observabilidade e Auditoria Final
+Notification Template Engine
 
-Nesta etapa final, consolidei os diferenciais técnicos do projeto, transformando a engine funcional em um serviço resiliente e pronto para operação. Foquei em estabelecer padrões rigorosos de monitoramento, garantir a integridade absoluta dos dados e aplicar princípios avançados de design de software.
+Microsserviço multi-tenant para gestão e execução de templates de
+notificação em múltiplos canais (E-mail, SMS e Webhook). Construído com
+foco em segurança operacional, integridade de dados e observabilidade.
 
-Implementações Técnicas e Diferenciais
+Arquitetura
 
-Observabilidade com Micrometer: Implementei métricas customizadas multidimensionais. Adicionei o contador notifications.execution.total com tags de channel, status e orgId. Essa abordagem permite a criação de dashboards granulares no Grafana para monitorar falhas por inquilino em tempo real, sem a necessidade de queries custosas no banco de dados.
+Utilizei Arquitetura Hexagonal (Ports & Adapters) para manter o domínio
+isolado de tecnologias externas. A modelagem segue Domain-Driven Design,
+com NotificationTemplate como Aggregate Root controlando o ciclo de vida
+e a imutabilidade das versões.
 
-Refatoração de Domínio (DDD): Reestruturei o agregado NotificationTemplate para garantir o encapsulamento total. Removi setters públicos e implementei métodos de domínio como updateContent() na TemplateVersion, assegurando que qualquer mutação respeite as invariantes de negócio e o estado de rascunho.
+O que foi implementado
 
-Garantia de Imutabilidade: Estabeleci travas lógicas que impedem a alteração de conteúdos em versões já publicadas. Uma vez que a versão é selada, ela se torna um registro histórico imutável para auditoria.
+CQRS com projeções: eventos Kafka alimentam uma TemplateStatsView separada,
+garantindo consultas analíticas em O(1) sem onerar a coleção principal.
 
-Resiliência em Sistemas Distribuídos: Adicionei um tratamento de exceções estruturado no consumidor Kafka. Essa proteção impede que mensagens malformadas causem loops de reprocessamento (poison pills), garantindo a continuidade do consumo para outros eventos.
+Versionamento semântico: Value Object SemanticVersion com incremento de
+Patch e Minor controlado pelo autor da versão.
 
-Blindagem de API com DTOs: Realizei o isolamento completo entre o modelo de domínio e o contrato REST. Utilizei o MapStruct para mapear entidades internas para DTOs específicos, prevenindo que mudanças na estrutura do banco de dados impactem os consumidores da API.
+Segurança no motor de renderização: proteção contra ReDoS via Regex
+não-gananciosa, limite de 50KB e sanitização de HTML para o canal EMAIL.
 
-Defesa de Arquitetura
+Observabilidade multidimensional: métricas via Micrometer com tags por
+channel, status e orgId prontas para Grafana.
 
-1. Estratégia de Monitoramento
+Consistência distribuída: Optimistic Locking via @Version para prevenir
+lost updates em edições concorrentes.
 
-Optei pelo uso do Micrometer em vez de logs simples para métricas de performance. Tags multidimensionais permitem que o time de SRE identifique rapidamente se um aumento na taxa de erro é global ou isolado a um único cliente (orgId) ou canal (ex: Webhooks lentos).
+Stack
 
-2. Encapsulamento vs. Modelo Anêmico
+Java 21 (Records, Sealed Interfaces, Pattern Matching)
+Spring Boot 3.5.11
+MongoDB + Spring Data
+Kafka (KRaft mode)
+OpenAPI 3.1 / Swagger UI
+JUnit 5 + Testcontainers + MapStruct + Caffeine
 
-Fechei o acesso aos campos do agregado para evitar que a lógica de negócio vaze para a camada de aplicação. Isso garante que eventos colaterais, como o disparo de mensagens para o Kafka, ocorram sempre em sincronia com a mudança de estado do objeto.
+Como executar
 
-Validação
+1. Requisitos: Java 21 e Docker instalados
+2. docker-compose up -d
+3. ./gradlew bootRun
+4. http://localhost:8080/swagger-ui.html
 
-As métricas podem ser consultadas via Spring Actuator:
-http://localhost:8080/actuator/metrics/notifications.execution.total
+Documentação técnica complementar
 
-Status: Projeto finalizado com 100% dos requisitos obrigatórios e diferenciais implementados.
+docs/ADR.md              → 24 decisões arquiteturais com contexto e trade-offs
+docs/ERROR_DICTIONARY.md → Códigos de erro com causas e resoluções
+docs/SCALABILITY.md      → Evolução técnica para alta disponibilidade
+
+![Diagrama de Arquitetura](docs/architecture_diagram.png)
+
+Histórico de desenvolvimento
+
+feat/infrastructure-setup    → Docker, Kafka KRaft, CI/CD
+feat/domain-persistence      → DDD, MongoDB, Testcontainers
+feat/business-logic          → RenderEngine, SchemaValidator, SemanticVersion
+feat/api-messaging-plus      → REST, Kafka, CQRS, Cache, MapStruct
+feat/observability-and-review→ Micrometer, encapsulamento DDD, resiliência
+
+O que faria diferente com mais tempo
+
+Transactional Outbox Pattern: a publicação no Kafka hoje é fire-and-forget.
+Em produção implementaria o Outbox com CDC via Debezium para garantir que
+nenhum evento seja perdido em falha parcial.
+
+Cache distribuído com Redis: o Caffeine atual é local por instância. Em
+ambiente com múltiplos pods precisaria de Redis para consistência entre
+réplicas.
+
+Dead Letter Queue: adicionaria DLT no consumer para isolar poison pills
+sem interromper o processamento da fila principal.
+
+Testes de contrato com Pact: para garantir que evoluções na API não quebrem
+consumidores em ambiente multi-tenant.
+
+MongoDB Replica Set: para habilitar transações ACID reais multi-documento.
+
+Trade-offs conscientes
+
+Fire-and-forget no Kafka: escolha deliberada para maximizar throughput da
+API de execução. Em cenário financeiro crítico, usaria confirmação síncrona.
+
+Caffeine local vs Redis: adequado para instância única do desafio; em
+produção com auto-scaling o Redis seria mandatório.

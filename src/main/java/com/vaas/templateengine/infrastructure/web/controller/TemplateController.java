@@ -4,7 +4,6 @@ import com.vaas.templateengine.application.dto.TemplateMapper;
 import com.vaas.templateengine.application.dto.TemplateMapper.*;
 import com.vaas.templateengine.application.service.TemplateService;
 import com.vaas.templateengine.domain.model.*;
-import com.vaas.templateengine.domain.port.NotificationTemplateRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -17,8 +16,8 @@ import java.util.List;
 
 /**
  * Adaptador de entrada (Primary Adapter) que expõe os recursos de templates via REST.
- * Responsável pela conformidade com o contrato OpenAPI e orquestração de chamadas ao serviço,
- * garantindo o isolamento da lógica de negócio.
+ * Responsável pela conformidade com o contrato OpenAPI e orquestração de chamadas ao serviço.
+ * A implementação isola as dependências de persistência, delegando a busca ao serviço de aplicação.
  */
 @RestController
 @RequestMapping("/v1/templates")
@@ -27,7 +26,6 @@ public class TemplateController {
 
     private final TemplateService templateService;
     private final TemplateMapper mapper;
-    private final NotificationTemplateRepository templateRepository;
 
     @PostMapping
     public ResponseEntity<TemplateResponse> create(@RequestBody @Valid CreateTemplateRequest request) {
@@ -46,7 +44,7 @@ public class TemplateController {
             @RequestParam(required = false) TemplateStatus status,
             @PageableDefault(size = 20) Pageable pageable) {
 
-        var page = templateRepository.findAll(orgId, workspaceId, channel, status, pageable);
+        var page = templateService.listTemplates(orgId, workspaceId, channel, status, pageable);
         return ResponseEntity.ok(mapper.toPagedResponse(page));
     }
 

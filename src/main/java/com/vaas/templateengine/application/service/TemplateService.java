@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,9 +24,9 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Orquestrador central da lógica de negócio.
- * Centraliza o controle de transações, integração com mensageria e gerenciamento de cache,
- * garantindo a aplicação consistente das regras de domínio e a observabilidade do sistema.
+ * Maestro da lógica de aplicação.
+ * Orquestra as transações ACID entre o domínio rico e os adaptadores de infraestrutura,
+ * garantindo a emissão de eventos e métricas operacionais.
  */
 @Slf4j
 @Service
@@ -67,6 +69,11 @@ public class TemplateService {
         NotificationTemplate saved = templateRepository.save(template);
         eventProducer.publish(new TemplateCreatedEvent(saved.getId(), OffsetDateTime.now(), saved.getName()));
         return saved;
+    }
+
+    public Page<NotificationTemplate> listTemplates(
+            String orgId, String workspaceId, Channel channel, TemplateStatus status, Pageable pageable) {
+        return templateRepository.findAll(orgId, workspaceId, channel, status, pageable);
     }
 
     @Transactional
@@ -163,7 +170,7 @@ public class TemplateService {
             renderedContent = renderEngine.render(version.getBody(), variables, template.getChannel() == Channel.EMAIL);
         } catch (BusinessException e) {
             status = ExecutionStatus.VALIDATION_ERROR;
-            renderedContent = "Falha de validação: " + e.getMessage();
+            renderedContent = "Falha de validação técnica.";
         }
 
         NotificationExecution execution = NotificationExecution.builder()
